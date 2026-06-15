@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pkmnprices"
-version = "1.0.0"
+version = "1.0.1"
 description = "Python client for the Pkmn Prices API"
 readme = "README.md"
 license = "MIT"
@@ -19,6 +19,8 @@ dependencies = ["httpx>=0.27"]
 
 [project.urls]
 Homepage = "https://pkmnprices.com"
+Repository = "https://github.com/preaverage/pkmnprices-py"
+Issues = "https://github.com/preaverage/pkmnprices-py/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "mypy>=1.10", "ruff>=0.5"]
