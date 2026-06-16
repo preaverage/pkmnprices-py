@@ -89,6 +89,8 @@ class AsyncCardsResource:
     async def list(
         self, *, name: str | None = None, set_id: int | None = None, tcg_player_id: int | None = None,
         number: str | None = None, total_set_number: str | None = None, rarity: str | None = None,
+        stage: str | None = None, card_type: str | None = None, weakness: str | None = None,
+        energy_type: str | None = None,
         language: str | None = None, currency: str | None = None, condition: str | None = None,
         variant: str | None = None, grade: str | None = None, min_price: float | None = None,
         max_price: float | None = None, sort: str | None = None,
@@ -96,7 +98,8 @@ class AsyncCardsResource:
     ) -> Page[CardSummary]:
         raw = await self._t.request(ep.cards_list(
             name=name, set_id=set_id, tcg_player_id=tcg_player_id, number=number,
-            total_set_number=total_set_number, rarity=rarity, language=language, currency=currency,
+            total_set_number=total_set_number, rarity=rarity, stage=stage, card_type=card_type,
+            weakness=weakness, energy_type=energy_type, language=language, currency=currency,
             condition=condition, variant=variant, grade=grade, min_price=min_price,
             max_price=max_price, sort=sort, page=page, per_page=per_page,
         ))

@@ -94,6 +94,15 @@ class CardSummary(Model):
 
 @dataclasses.dataclass
 class Card(CardSummary):
+    stage: str | None = None
+    card_type: str | None = None
+    weakness: str | None = None
+    resistance: str | None = None
+    retreat_cost: int | None = None
+    energy_type: list[str] | None = None
+    ability: str | None = None
+    flavor_text: str | None = None
+    attacks: list[str] = dataclasses.field(default_factory=list)
     prices: list[Price] = dataclasses.field(default_factory=list)
 
 
