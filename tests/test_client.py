@@ -87,6 +87,28 @@ def test_cursor_pagination() -> None:
     assert len(client.cards.listings.all_ebay(789)) == 2
 
 
+def test_tcgplayer_listings() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [{"id": 1, "listing_id": 274183167, "printing": "1st Edition Holofoil",
+                                "condition": "Near Mint", "language": "English", "price": 4650.0,
+                                "shipping_price": 0.0, "seller_name": "Cash Cow Games", "seller_id": "120594",
+                                "seller_rating": 100.0, "seller_sales": "50000+", "quantity": 1,
+                                "listing_type": "standard", "direct_seller": False, "gold_seller": True,
+                                "verified_seller": False, "custom_title": None, "updated_at": "2026-06-17T03:44:00+00:00"}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    listings = client.cards.listings.all_tcgplayer(789, condition="Near Mint", printing="1st Edition Holofoil")
+    assert len(listings) == 1
+    assert listings[0].seller_name == "Cash Cow Games"
+    assert listings[0].shipping_price == 0.0
+    assert "/v1/cards/789/listings/tcgplayer" in captured["url"]
+    assert "printing=1st+Edition+Holofoil" in captured["url"]
+
+
 def test_retry_on_rate_limit_then_succeed() -> None:
     state = {"n": 0}
 

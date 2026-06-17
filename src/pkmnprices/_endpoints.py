@@ -50,6 +50,10 @@ def cards_listings_cardmarket(card_id: int, **query: Any) -> Request:
     return Request("GET", f"/v1/cards/{card_id}/listings/cardmarket", _clean(query))
 
 
+def cards_listings_tcgplayer(card_id: int, **query: Any) -> Request:
+    return Request("GET", f"/v1/cards/{card_id}/listings/tcgplayer", _clean(query))
+
+
 def sealed_list(**query: Any) -> Request:
     return Request("GET", "/v1/sealed", _clean(query))
 

@@ -65,7 +65,7 @@ Rate-limit `429`s are retried with backoff. Credit-limit `429`s (`credit_limit_e
 
 ## Pagination
 
-List endpoints return a `Page` (`.data`, `.pagination`). Listing endpoints (eBay/Cardmarket) return a `CursorPage`. Both resources expose iterators so you don't track pages or cursors:
+List endpoints return a `Page` (`.data`, `.pagination`). Listing endpoints (eBay/Cardmarket/TCGplayer) return a `CursorPage`. Both resources expose iterators so you don't track pages or cursors:
 
 ```python
 for card in client.cards.iterate(name="charizard"):
@@ -75,6 +75,9 @@ all_sets = client.sets.list_all(language="english")
 
 for sale in client.cards.listings.iterate_ebay(789, grader="PSA", grade="10"):
     print(sale.title, sale.price)
+
+for offer in client.cards.listings.iterate_tcgplayer(789, condition="Near Mint"):
+    print(offer.seller_name, offer.price, offer.shipping_price)
 ```
 
 ## Currency

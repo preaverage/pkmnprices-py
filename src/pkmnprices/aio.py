@@ -16,6 +16,7 @@ from .models import (
     SealedEbayListing,
     SealedSummary,
     Set,
+    TcgplayerListing,
 )
 from .pagination import paginate_async, paginate_cursor_async
 
@@ -79,6 +80,23 @@ class AsyncCardListingsResource:
 
     async def all_cardmarket(self, card_id: int, **params: Any) -> List[CardmarketListing]:
         return [item async for item in self.iterate_cardmarket(card_id, **params)]
+
+    async def tcgplayer(
+        self, card_id: int, *, condition: str | None = None, language: str | None = None,
+        printing: str | None = None, min_price: float | None = None, max_price: float | None = None,
+        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+    ) -> CursorPage[TcgplayerListing]:
+        raw = await self._t.request(ep.cards_listings_tcgplayer(
+            card_id, condition=condition, language=language, printing=printing,
+            min_price=min_price, max_price=max_price, sort=sort, limit=limit, cursor=cursor,
+        ))
+        return ep.build_cursor_page(raw, TcgplayerListing)
+
+    def iterate_tcgplayer(self, card_id: int, **params: Any) -> AsyncIterator[TcgplayerListing]:
+        return paginate_cursor_async(lambda cursor: self.tcgplayer(card_id, **{**params, "cursor": cursor}))
+
+    async def all_tcgplayer(self, card_id: int, **params: Any) -> List[TcgplayerListing]:
+        return [item async for item in self.iterate_tcgplayer(card_id, **params)]
 
 
 class AsyncCardsResource:

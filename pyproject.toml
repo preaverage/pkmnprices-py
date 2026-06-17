@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pkmnprices"
-version = "1.0.2"
+version = "1.0.3"
 description = "Python client for the Pkmn Prices API"
 readme = "README.md"
 license = "MIT"

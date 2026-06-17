@@ -147,6 +147,28 @@ class CardmarketListing(Model):
 
 
 @dataclasses.dataclass
+class TcgplayerListing(Model):
+    id: int
+    listing_id: int | None
+    printing: str
+    condition: str | None
+    language: str | None
+    price: float
+    shipping_price: float | None
+    seller_name: str | None
+    seller_id: str | None
+    seller_rating: float | None
+    seller_sales: str | None
+    quantity: int | None
+    listing_type: str | None
+    direct_seller: bool | None
+    gold_seller: bool | None
+    verified_seller: bool | None
+    custom_title: str | None
+    updated_at: str
+
+
+@dataclasses.dataclass
 class SealedSummary(Model):
     id: int
     tcg_player_id: int

@@ -29,9 +29,10 @@ from .models import (
     SealedSummary,
     Set,
     SetRef,
+    TcgplayerListing,
 )
 
-__version__ = "1.0.0"
+__version__ = "1.0.3"
 
 __all__ = [
     "PkmnPrices",
@@ -63,4 +64,5 @@ __all__ = [
     "SealedSummary",
     "Set",
     "SetRef",
+    "TcgplayerListing",
 ]
