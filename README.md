@@ -88,6 +88,19 @@ Every price has a `currency` field. Pass `currency="usd"` or `currency="eur"` to
 card = client.cards.get(789, currency="usd")
 ```
 
+## Cardmarket Mapping
+
+Card detail responses expose Cardmarket's stable product identifiers when a
+mapping is available:
+
+```python
+card = client.cards.get(789)
+print(card.cardmarket_url)
+print(card.cardmarket_product_id)
+```
+
+Both fields are `None` until the card has been mapped.
+
 ## Errors
 
 Everything raised subclasses `PkmnPricesError`, which carries `status`, `code`, `rate_limit`, and `retry_after`.

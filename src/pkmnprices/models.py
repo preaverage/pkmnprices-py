@@ -94,6 +94,8 @@ class CardSummary(Model):
 
 @dataclasses.dataclass
 class Card(CardSummary):
+    cardmarket_url: str | None = None
+    cardmarket_product_id: int | None = None
     stage: str | None = None
     card_type: str | None = None
     weakness: str | None = None

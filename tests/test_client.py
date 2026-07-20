@@ -44,6 +44,8 @@ def test_forbidden_maps_to_error() -> None:
 def test_card_model_parsing() -> None:
     payload = {
         "id": 789, "tcg_player_id": 519184, "name": "Charizard ex", "image_url": None,
+        "cardmarket_url": "/en/Pokemon/Products/Singles/Obsidian-Flames/Charizard-ex-OBF006",
+        "cardmarket_product_id": 733537,
         "number": "006", "total_set_number": "197", "rarity": "Double Rare",
         "artist": "PLANETA", "hp": 330, "set": {"id": 123, "name": "Obsidian Flames"},
         "prices": [{"source": "tcgplayer", "currency": "USD", "condition": "Near Mint",
@@ -54,6 +56,8 @@ def test_card_model_parsing() -> None:
     card = client.cards.get(789)
 
     assert card.name == "Charizard ex"
+    assert card.cardmarket_product_id == 733537
+    assert card.cardmarket_url.endswith("Charizard-ex-OBF006")
     assert card.set.name == "Obsidian Flames"
     assert card.prices[0].market_price == 42.5
     assert card.prices[0].currency == "USD"
