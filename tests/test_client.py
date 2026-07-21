@@ -61,6 +61,31 @@ def test_card_model_parsing() -> None:
     assert card.set.name == "Obsidian Flames"
     assert card.prices[0].market_price == 42.5
     assert card.prices[0].currency == "USD"
+    assert card.prices[0].low is None
+    assert card.prices[0].trend is None
+    assert card.prices[0].avg is None
+
+
+def test_cardmarket_price_guide_fields() -> None:
+    payload = {
+        "id": 1, "tcg_player_id": 1, "name": "Test", "image_url": None,
+        "number": "001", "total_set_number": "100", "rarity": None,
+        "artist": None, "hp": None, "set": {"id": 1, "name": "Set"},
+        "prices": [{
+            "source": "cardmarket", "currency": "EUR", "condition": "Near Mint",
+            "variant": None, "market_price": 39.99, "low": 35.0, "trend": 39.99,
+            "avg": 41.2, "created_at": "2025-01-15T08:30:00Z",
+        }],
+    }
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(lambda r: _json(payload)))
+    card = client.cards.get(1)
+    price = card.prices[0]
+    assert price.source == "cardmarket"
+    assert price.market_price == 39.99
+    assert price.low == 35.0
+    assert price.trend == 39.99
+    assert price.avg == 41.2
 
 
 def test_page_auto_pagination() -> None:

@@ -76,6 +76,10 @@ class Price(Model):
     variant: str | None
     market_price: float
     created_at: str
+    # Cardmarket Price Guide fields; null for tcgplayer/ebay / missing values.
+    low: float | None = None
+    trend: float | None = None
+    avg: float | None = None
 
 
 @dataclasses.dataclass
