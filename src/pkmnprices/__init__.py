@@ -25,14 +25,13 @@ from .models import (
     Price,
     PriceHistoryPoint,
     Sealed,
-    SealedEbayListing,
     SealedSummary,
     Set,
     SetRef,
     TcgplayerListing,
 )
 
-__version__ = "1.0.4"
+__version__ = "2.0.0"
 
 __all__ = [
     "PkmnPrices",
@@ -60,7 +59,6 @@ __all__ = [
     "Price",
     "PriceHistoryPoint",
     "Sealed",
-    "SealedEbayListing",
     "SealedSummary",
     "Set",
     "SetRef",

@@ -13,7 +13,6 @@ from .models import (
     Page,
     PriceHistoryPoint,
     Sealed,
-    SealedEbayListing,
     SealedSummary,
     Set,
     TcgplayerListing,
@@ -48,12 +47,12 @@ class CardListingsResource:
         self._t = transport
 
     def ebay(
-        self, card_id: int, *, grader: str | None = None, grade: str | None = None,
-        min_price: float | None = None, max_price: float | None = None,
+        self, card_id: int, *, graded: bool | None = None, grader: str | None = None,
+        grade: str | None = None, min_price: float | None = None, max_price: float | None = None,
         sort: str | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[EbayListing]:
         raw = self._t.request(ep.cards_listings_ebay(
-            card_id, grader=grader, grade=grade, min_price=min_price,
+            card_id, graded=graded, grader=grader, grade=grade, min_price=min_price,
             max_price=max_price, sort=sort, limit=limit, cursor=cursor,
         ))
         return ep.build_cursor_page(raw, EbayListing)
@@ -176,18 +175,3 @@ class SealedResource:
     ) -> Page[PriceHistoryPoint]:
         raw = self._t.request(ep.sealed_history(sealed_id, period=period, currency=currency, limit=limit, page=page))
         return ep.build_page(raw, PriceHistoryPoint)
-
-    def listings(
-        self, sealed_id: int, *, min_price: float | None = None, max_price: float | None = None,
-        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
-    ) -> CursorPage[SealedEbayListing]:
-        raw = self._t.request(ep.sealed_listings(
-            sealed_id, min_price=min_price, max_price=max_price, sort=sort, limit=limit, cursor=cursor,
-        ))
-        return ep.build_cursor_page(raw, SealedEbayListing)
-
-    def iterate_listings(self, sealed_id: int, **params: Any) -> Iterator[SealedEbayListing]:
-        return paginate_cursor(lambda cursor: self.listings(sealed_id, **{**params, "cursor": cursor}))
-
-    def all_listings(self, sealed_id: int, **params: Any) -> List[SealedEbayListing]:
-        return list(self.iterate_listings(sealed_id, **params))
