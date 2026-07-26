@@ -73,7 +73,7 @@ for card in client.cards.iterate(name="charizard"):
 
 all_sets = client.sets.list_all(language="english")
 
-for sale in client.cards.listings.iterate_ebay(789, grader="PSA", grade="10"):
+for sale in client.cards.listings.iterate_ebay(789, graded=True, grader="PSA", grade="10"):
     print(sale.title, sale.price)
 
 for offer in client.cards.listings.iterate_tcgplayer(789, condition="Near Mint"):

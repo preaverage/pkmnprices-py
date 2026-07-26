@@ -107,13 +107,31 @@ def test_cursor_pagination() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         state["n"] += 1
         more = state["n"] < 2
-        return _json({"data": [{"id": state["n"], "ebay_listing_id": "x", "title": "t", "price": 1.0,
-                                "grader": None, "grade": None, "sale_type": "auction",
+        return _json({"data": [{"id": state["n"], "title": "t", "price": 1.0,
+                                "grader": None, "grade": None,
                                 "sold_at": "2025-01-01", "listing_url": "u"}],
                       "pagination": {"has_more": more, "next_cursor": "abc" if more else None, "count": 1}})
 
     client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
     assert len(client.cards.listings.all_ebay(789)) == 2
+
+
+def test_ebay_listings_graded_param() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [{"id": 1, "title": "PSA 10", "price": 10.0,
+                                "grader": "PSA", "grade": "10",
+                                "sold_at": "2025-01-01", "listing_url": None}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    page = client.cards.listings.ebay(789, graded=True, grader="PSA", grade="10")
+    assert page.data[0].grader == "PSA"
+    assert page.data[0].listing_url is None
+    assert "graded=true" in captured["url"]
+    assert "grader=PSA" in captured["url"]
 
 
 def test_tcgplayer_listings() -> None:

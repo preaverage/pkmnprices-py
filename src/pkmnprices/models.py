@@ -128,14 +128,12 @@ class PriceHistoryPoint(Model):
 @dataclasses.dataclass
 class EbayListing(Model):
     id: int
-    ebay_listing_id: str
     title: str
     price: float
     grader: str | None
     grade: str | None
-    sale_type: str
     sold_at: str
-    listing_url: str
+    listing_url: str | None
 
 
 @dataclasses.dataclass
@@ -186,17 +184,6 @@ class SealedSummary(Model):
 @dataclasses.dataclass
 class Sealed(SealedSummary):
     prices: list[Price] = dataclasses.field(default_factory=list)
-
-
-@dataclasses.dataclass
-class SealedEbayListing(Model):
-    id: int
-    ebay_listing_id: str
-    title: str
-    price: float
-    sale_type: str
-    sold_at: str
-    listing_url: str
 
 
 @dataclasses.dataclass
