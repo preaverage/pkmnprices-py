@@ -14,7 +14,6 @@ from .errors import (
 )
 from .models import (
     Card,
-    CardmarketListing,
     CardSummary,
     CursorInfo,
     CursorPage,
@@ -31,7 +30,7 @@ from .models import (
     TcgplayerListing,
 )
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 
 __all__ = [
     "PkmnPrices",
@@ -49,7 +48,6 @@ __all__ = [
     "RateLimitInfo",
     "Card",
     "CardSummary",
-    "CardmarketListing",
     "CursorInfo",
     "CursorPage",
     "EbayListing",
