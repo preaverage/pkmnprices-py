@@ -46,10 +46,6 @@ def cards_listings_ebay(card_id: int, **query: Any) -> Request:
     return Request("GET", f"/v1/cards/{card_id}/listings/ebay", _clean(query))
 
 
-def cards_listings_cardmarket(card_id: int, **query: Any) -> Request:
-    return Request("GET", f"/v1/cards/{card_id}/listings/cardmarket", _clean(query))
-
-
 def cards_listings_tcgplayer(card_id: int, **query: Any) -> Request:
     return Request("GET", f"/v1/cards/{card_id}/listings/tcgplayer", _clean(query))
 

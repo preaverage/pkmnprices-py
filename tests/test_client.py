@@ -72,9 +72,9 @@ def test_cardmarket_price_guide_fields() -> None:
         "number": "001", "total_set_number": "100", "rarity": None,
         "artist": None, "hp": None, "set": {"id": 1, "name": "Set"},
         "prices": [{
-            "source": "cardmarket", "currency": "EUR", "condition": "Near Mint",
-            "variant": None, "market_price": 39.99, "low": 35.0, "trend": 39.99,
-            "avg": 41.2, "created_at": "2025-01-15T08:30:00Z",
+            "source": "cardmarket", "currency": "EUR", "condition": None,
+            "variant": "Reverse Holofoil", "market_price": 39.99, "low": 35.0,
+            "trend": 39.99, "avg": 41.2, "created_at": "2025-01-15T08:30:00Z",
         }],
     }
 
@@ -86,6 +86,9 @@ def test_cardmarket_price_guide_fields() -> None:
     assert price.low == 35.0
     assert price.trend == 39.99
     assert price.avg == 41.2
+    # The guide covers every condition at once, so it reports the printing only.
+    assert price.condition is None
+    assert price.variant == "Reverse Holofoil"
 
 
 def test_page_auto_pagination() -> None:

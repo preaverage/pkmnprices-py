@@ -6,7 +6,6 @@ from . import _endpoints as ep
 from ._http import SyncTransport
 from .models import (
     Card,
-    CardmarketListing,
     CardSummary,
     CursorPage,
     EbayListing,
@@ -62,23 +61,6 @@ class CardListingsResource:
 
     def all_ebay(self, card_id: int, **params: Any) -> List[EbayListing]:
         return list(self.iterate_ebay(card_id, **params))
-
-    def cardmarket(
-        self, card_id: int, *, condition: str | None = None, language: str | None = None,
-        variant: str | None = None, min_price: float | None = None, max_price: float | None = None,
-        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
-    ) -> CursorPage[CardmarketListing]:
-        raw = self._t.request(ep.cards_listings_cardmarket(
-            card_id, condition=condition, language=language, variant=variant,
-            min_price=min_price, max_price=max_price, sort=sort, limit=limit, cursor=cursor,
-        ))
-        return ep.build_cursor_page(raw, CardmarketListing)
-
-    def iterate_cardmarket(self, card_id: int, **params: Any) -> Iterator[CardmarketListing]:
-        return paginate_cursor(lambda cursor: self.cardmarket(card_id, **{**params, "cursor": cursor}))
-
-    def all_cardmarket(self, card_id: int, **params: Any) -> List[CardmarketListing]:
-        return list(self.iterate_cardmarket(card_id, **params))
 
     def tcgplayer(
         self, card_id: int, *, condition: str | None = None, language: str | None = None,

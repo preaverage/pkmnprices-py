@@ -72,6 +72,7 @@ class Set(Model):
 class Price(Model):
     source: PriceSource
     currency: Currency
+    # None on Cardmarket rows: the Price Guide covers every condition at once.
     condition: str | None
     variant: str | None
     market_price: float
@@ -134,20 +135,6 @@ class EbayListing(Model):
     grade: str | None
     sold_at: str
     listing_url: str | None
-
-
-@dataclasses.dataclass
-class CardmarketListing(Model):
-    id: int
-    article_id: int
-    price: float
-    variant: str | None
-    condition: str | None
-    seller: str
-    quantity: int
-    language: str | None
-    comment: str | None
-    updated_at: str
 
 
 @dataclasses.dataclass
