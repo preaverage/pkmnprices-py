@@ -132,17 +132,17 @@ class SealedResource:
 
     def list(
         self, *, set_id: int | None = None, name: str | None = None, language: str | None = None,
-        min_price: float | None = None, max_price: float | None = None, sort: str | None = None,
-        page: int | None = None, per_page: int | None = None,
+        currency: str | None = None, min_price: float | None = None, max_price: float | None = None,
+        sort: str | None = None, page: int | None = None, per_page: int | None = None,
     ) -> Page[SealedSummary]:
         raw = self._t.request(ep.sealed_list(
-            set_id=set_id, name=name, language=language, min_price=min_price,
-            max_price=max_price, sort=sort, page=page, per_page=per_page,
+            set_id=set_id, name=name, language=language, currency=currency,
+            min_price=min_price, max_price=max_price, sort=sort, page=page, per_page=per_page,
         ))
         return ep.build_page(raw, SealedSummary)
 
-    def get(self, sealed_id: int) -> Sealed:
-        return Sealed.from_dict(self._t.request(ep.sealed_get(sealed_id)))
+    def get(self, sealed_id: int, *, currency: str | None = None) -> Sealed:
+        return Sealed.from_dict(self._t.request(ep.sealed_get(sealed_id, currency=currency)))
 
     def iterate(self, **params: Any) -> Iterator[SealedSummary]:
         start = params.get("page") or 1

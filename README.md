@@ -86,6 +86,7 @@ Every price has a `currency` field. Pass `currency="usd"` or `currency="eur"` to
 
 ```python
 card = client.cards.get(789, currency="usd")
+box = client.sealed.get(5678, currency="eur")
 ```
 
 Cardmarket prices come from the Price Guide, which folds every condition and
@@ -96,16 +97,20 @@ EUR prices by `variant` rather than `condition`.
 
 ## Cardmarket Mapping
 
-Card detail responses expose Cardmarket's stable product identifiers when a
-mapping is available:
+Card and sealed detail responses expose Cardmarket's stable product identifiers
+when a mapping is available:
 
 ```python
 card = client.cards.get(789)
 print(card.cardmarket_url)
 print(card.cardmarket_product_id)
+
+box = client.sealed.get(5678)
+print(box.cardmarket_url)
+print(box.cardmarket_product_id)
 ```
 
-Both fields are `None` until the card has been mapped.
+Both fields are `None` until the product has been mapped.
 
 ## Errors
 
