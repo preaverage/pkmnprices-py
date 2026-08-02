@@ -170,6 +170,8 @@ class SealedSummary(Model):
 
 @dataclasses.dataclass
 class Sealed(SealedSummary):
+    cardmarket_url: str | None = None
+    cardmarket_product_id: int | None = None
     prices: list[Price] = dataclasses.field(default_factory=list)
 
 

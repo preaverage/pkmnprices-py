@@ -41,6 +41,30 @@ def test_forbidden_maps_to_error() -> None:
     assert exc.value.code == "forbidden"
 
 
+def test_sealed_get_passes_currency() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return _json({
+            "id": 1,
+            "tcg_player_id": 2,
+            "name": "Box",
+            "image_url": None,
+            "cardmarket_url": None,
+            "cardmarket_product_id": None,
+            "set": {"id": 3, "name": "Set"},
+            "prices": [],
+        })
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    client.sealed.get(1, currency="eur")
+
+    url = httpx.URL(seen["url"])
+    assert url.path == "/v1/sealed/1"
+    assert dict(url.params) == {"currency": "eur"}
+
+
 def test_card_model_parsing() -> None:
     payload = {
         "id": 789, "tcg_player_id": 519184, "name": "Charizard ex", "image_url": None,

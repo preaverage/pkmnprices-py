@@ -54,8 +54,8 @@ def sealed_list(**query: Any) -> Request:
     return Request("GET", "/v1/sealed", _clean(query))
 
 
-def sealed_get(sealed_id: int) -> Request:
-    return Request("GET", f"/v1/sealed/{sealed_id}")
+def sealed_get(sealed_id: int, **query: Any) -> Request:
+    return Request("GET", f"/v1/sealed/{sealed_id}", _clean(query))
 
 
 def sealed_history(sealed_id: int, **query: Any) -> Request:
