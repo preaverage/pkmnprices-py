@@ -65,7 +65,7 @@ Rate-limit `429`s are retried with backoff. Credit-limit `429`s (`credit_limit_e
 
 ## Pagination
 
-List endpoints return a `Page` (`.data`, `.pagination`). Listing endpoints (eBay/TCGplayer) return a `CursorPage`. Both resources expose iterators so you don't track pages or cursors:
+List endpoints return a `Page` (`.data`, `.pagination`). Listing endpoints (eBay, Cardmarket, and TCGplayer) return a `CursorPage`. Both resources expose iterators so you don't track pages or cursors:
 
 ```python
 for card in client.cards.iterate(name="charizard"):
@@ -75,6 +75,9 @@ all_sets = client.sets.list_all(language="english")
 
 for sale in client.cards.listings.iterate_ebay(789, graded=True, grader="PSA", grade="10"):
     print(sale.title, sale.price)
+
+for offer in client.cards.listings.iterate_cardmarket(789, condition="Near Mint", variant="Reverse Holo"):
+    print(offer.seller, offer.price, offer.language)
 
 for offer in client.cards.listings.iterate_tcgplayer(789, condition="Near Mint"):
     print(offer.seller_name, offer.price, offer.shipping_price)
@@ -89,11 +92,12 @@ card = client.cards.get(789, currency="usd")
 box = client.sealed.get(5678, currency="eur")
 ```
 
-Cardmarket prices come from the Price Guide, which folds every condition and
-language into one figure per printing, so their `condition` is `None` — don't
-read them as Near Mint. They also carry nullable `low`, `trend`, and `avg` guide
-values alongside `market_price`, which stays the primary display field. Group
-EUR prices by `variant` rather than `condition`.
+Cardmarket current prices are condition- and printing-specific marketplace
+prices. Each EUR row has one `market_price` for its exact `condition` and
+`variant`; for example, a Near Mint Reverse Holofoil price is distinct from a
+Mint or Normal price. The retired Price Guide `low`, `trend`, and `avg` fields
+are not returned. Live Cardmarket listings are automatically restricted to the
+card's language.
 
 ## Cardmarket Mapping
 

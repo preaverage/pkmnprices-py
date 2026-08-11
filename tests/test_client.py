@@ -85,20 +85,17 @@ def test_card_model_parsing() -> None:
     assert card.set.name == "Obsidian Flames"
     assert card.prices[0].market_price == 42.5
     assert card.prices[0].currency == "USD"
-    assert card.prices[0].low is None
-    assert card.prices[0].trend is None
-    assert card.prices[0].avg is None
 
 
-def test_cardmarket_price_guide_fields() -> None:
+def test_cardmarket_condition_price() -> None:
     payload = {
         "id": 1, "tcg_player_id": 1, "name": "Test", "image_url": None,
         "number": "001", "total_set_number": "100", "rarity": None,
         "artist": None, "hp": None, "set": {"id": 1, "name": "Set"},
         "prices": [{
-            "source": "cardmarket", "currency": "EUR", "condition": None,
-            "variant": "Reverse Holofoil", "market_price": 39.99, "low": 35.0,
-            "trend": 39.99, "avg": 41.2, "created_at": "2025-01-15T08:30:00Z",
+            "source": "cardmarket", "currency": "EUR", "condition": "Near Mint",
+            "variant": "Reverse Holofoil", "market_price": 39.99,
+            "created_at": "2026-08-11T08:30:00Z",
         }],
     }
 
@@ -107,11 +104,7 @@ def test_cardmarket_price_guide_fields() -> None:
     price = card.prices[0]
     assert price.source == "cardmarket"
     assert price.market_price == 39.99
-    assert price.low == 35.0
-    assert price.trend == 39.99
-    assert price.avg == 41.2
-    # The guide covers every condition at once, so it reports the printing only.
-    assert price.condition is None
+    assert price.condition == "Near Mint"
     assert price.variant == "Reverse Holofoil"
 
 
@@ -181,6 +174,29 @@ def test_tcgplayer_listings() -> None:
     assert listings[0].shipping_price == 0.0
     assert "/v1/cards/789/listings/tcgplayer" in captured["url"]
     assert "printing=1st+Edition+Holofoil" in captured["url"]
+
+
+def test_cardmarket_listings() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [{
+            "id": 3456, "article_id": 1789012345, "price": 38.5,
+            "variant": "Reverse Holofoil", "condition": "Near Mint",
+            "seller": "CardKingdomEU", "quantity": 2, "language": "EN",
+            "comment": None, "updated_at": "2026-08-11T14:22:00+00:00",
+        }], "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    listings = client.cards.listings.all_cardmarket(
+        789, condition="Near Mint", variant="Reverse Holo",
+    )
+    assert len(listings) == 1
+    assert listings[0].seller == "CardKingdomEU"
+    assert listings[0].language == "EN"
+    assert "/v1/cards/789/listings/cardmarket" in captured["url"]
+    assert "variant=Reverse+Holo" in captured["url"]
 
 
 def test_retry_on_rate_limit_then_succeed() -> None:
