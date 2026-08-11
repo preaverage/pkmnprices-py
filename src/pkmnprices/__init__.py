@@ -14,6 +14,7 @@ from .errors import (
 )
 from .models import (
     Card,
+    CardmarketListing,
     CardSummary,
     CursorInfo,
     CursorPage,
@@ -47,6 +48,7 @@ __all__ = [
     "APIConnectionError",
     "RateLimitInfo",
     "Card",
+    "CardmarketListing",
     "CardSummary",
     "CursorInfo",
     "CursorPage",
