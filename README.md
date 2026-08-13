@@ -83,6 +83,22 @@ for offer in client.cards.listings.iterate_tcgplayer(789, condition="Near Mint")
     print(offer.seller_name, offer.price, offer.shipping_price)
 ```
 
+Sealed products carry the same two listing sources, under `client.sealed.listings`:
+
+```python
+for offer in client.sealed.listings.iterate_tcgplayer(5678):
+    print(offer.seller_name, offer.price, offer.quantity)
+
+for sale in client.sealed.listings.iterate_ebay(5678, sort="price_desc"):
+    print(sale.title, sale.price, sale.sold_at)
+```
+
+Sealed TCGplayer offers are normally condition `"Unopened"` with an empty
+`printing`, so those two filters rarely narrow anything. Sealed eBay sales are
+never graded, so `graded`, `grader`, and `grade` aren't accepted there and
+`grader`/`grade` come back `None`. The async client mirrors all of these on
+`AsyncPkmnPrices`.
+
 ## Currency
 
 Every price has a `currency` field. Pass `currency="usd"` or `currency="eur"` to filter, or leave it off to get everything your plan allows. EUR (Cardmarket) prices need a Pro plan; a free key asking for `eur` raises `ForbiddenError`.
