@@ -144,9 +144,51 @@ class AsyncCardsResource:
         return paginate_async(lambda page: self.price_history(card_id, **{**params, "page": page}), start)
 
 
+class AsyncSealedListingsResource:
+    def __init__(self, transport: AsyncTransport) -> None:
+        self._t = transport
+
+    # Sealed eBay sales are never graded, so graded/grader/grade don't apply.
+    async def ebay(
+        self, sealed_id: int, *, min_price: float | None = None, max_price: float | None = None,
+        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+    ) -> CursorPage[EbayListing]:
+        raw = await self._t.request(ep.sealed_listings_ebay(
+            sealed_id, min_price=min_price, max_price=max_price,
+            sort=sort, limit=limit, cursor=cursor,
+        ))
+        return ep.build_cursor_page(raw, EbayListing)
+
+    def iterate_ebay(self, sealed_id: int, **params: Any) -> AsyncIterator[EbayListing]:
+        return paginate_cursor_async(lambda cursor: self.ebay(sealed_id, **{**params, "cursor": cursor}))
+
+    async def all_ebay(self, sealed_id: int, **params: Any) -> List[EbayListing]:
+        return [item async for item in self.iterate_ebay(sealed_id, **params)]
+
+    # Sealed offers are normally condition "Unopened" with an empty printing,
+    # so those two filters rarely narrow anything here.
+    async def tcgplayer(
+        self, sealed_id: int, *, condition: str | None = None, language: str | None = None,
+        printing: str | None = None, min_price: float | None = None, max_price: float | None = None,
+        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+    ) -> CursorPage[TcgplayerListing]:
+        raw = await self._t.request(ep.sealed_listings_tcgplayer(
+            sealed_id, condition=condition, language=language, printing=printing,
+            min_price=min_price, max_price=max_price, sort=sort, limit=limit, cursor=cursor,
+        ))
+        return ep.build_cursor_page(raw, TcgplayerListing)
+
+    def iterate_tcgplayer(self, sealed_id: int, **params: Any) -> AsyncIterator[TcgplayerListing]:
+        return paginate_cursor_async(lambda cursor: self.tcgplayer(sealed_id, **{**params, "cursor": cursor}))
+
+    async def all_tcgplayer(self, sealed_id: int, **params: Any) -> List[TcgplayerListing]:
+        return [item async for item in self.iterate_tcgplayer(sealed_id, **params)]
+
+
 class AsyncSealedResource:
     def __init__(self, transport: AsyncTransport) -> None:
         self._t = transport
+        self.listings = AsyncSealedListingsResource(transport)
 
     async def list(
         self, *, set_id: int | None = None, name: str | None = None, language: str | None = None,

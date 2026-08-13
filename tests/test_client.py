@@ -176,6 +176,47 @@ def test_tcgplayer_listings() -> None:
     assert "printing=1st+Edition+Holofoil" in captured["url"]
 
 
+def test_sealed_tcgplayer_listings() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [{"id": 9, "listing_id": 991122, "printing": "",
+                                "condition": "Unopened", "language": "English", "price": 128.99,
+                                "shipping_price": 0.0, "seller_name": "SealedVault", "seller_id": "77321",
+                                "seller_rating": 99.2, "seller_sales": "10000+", "quantity": 4,
+                                "listing_type": "standard", "direct_seller": False, "gold_seller": True,
+                                "verified_seller": True, "custom_title": None,
+                                "updated_at": "2026-08-13T09:10:00+00:00"}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    listings = client.sealed.listings.all_tcgplayer(5678, sort="price_asc")
+    assert len(listings) == 1
+    assert listings[0].seller_name == "SealedVault"
+    assert listings[0].condition == "Unopened"
+    assert "/v1/sealed/5678/listings/tcgplayer" in captured["url"]
+    assert "sort=price_asc" in captured["url"]
+
+
+def test_sealed_ebay_listings() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [{"id": 4, "title": "Obsidian Flames Booster Box", "price": 119.0,
+                                "grader": None, "grade": None, "sold_at": "2026-08-01",
+                                "listing_url": "https://example.test/x"}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    page = client.sealed.listings.ebay(5678, min_price=100.0)
+    assert page.data[0].grader is None
+    assert page.data[0].price == 119.0
+    assert "/v1/sealed/5678/listings/ebay" in captured["url"]
+    assert "min_price=100" in captured["url"]
+
+
 def test_cardmarket_listings() -> None:
     captured = {}
 

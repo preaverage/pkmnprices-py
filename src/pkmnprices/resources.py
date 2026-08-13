@@ -144,9 +144,51 @@ class CardsResource:
         return paginate(lambda page: self.price_history(card_id, **{**params, "page": page}), start)
 
 
+class SealedListingsResource:
+    def __init__(self, transport: SyncTransport) -> None:
+        self._t = transport
+
+    # Sealed eBay sales are never graded, so graded/grader/grade don't apply.
+    def ebay(
+        self, sealed_id: int, *, min_price: float | None = None, max_price: float | None = None,
+        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+    ) -> CursorPage[EbayListing]:
+        raw = self._t.request(ep.sealed_listings_ebay(
+            sealed_id, min_price=min_price, max_price=max_price,
+            sort=sort, limit=limit, cursor=cursor,
+        ))
+        return ep.build_cursor_page(raw, EbayListing)
+
+    def iterate_ebay(self, sealed_id: int, **params: Any) -> Iterator[EbayListing]:
+        return paginate_cursor(lambda cursor: self.ebay(sealed_id, **{**params, "cursor": cursor}))
+
+    def all_ebay(self, sealed_id: int, **params: Any) -> List[EbayListing]:
+        return list(self.iterate_ebay(sealed_id, **params))
+
+    # Sealed offers are normally condition "Unopened" with an empty printing,
+    # so those two filters rarely narrow anything here.
+    def tcgplayer(
+        self, sealed_id: int, *, condition: str | None = None, language: str | None = None,
+        printing: str | None = None, min_price: float | None = None, max_price: float | None = None,
+        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+    ) -> CursorPage[TcgplayerListing]:
+        raw = self._t.request(ep.sealed_listings_tcgplayer(
+            sealed_id, condition=condition, language=language, printing=printing,
+            min_price=min_price, max_price=max_price, sort=sort, limit=limit, cursor=cursor,
+        ))
+        return ep.build_cursor_page(raw, TcgplayerListing)
+
+    def iterate_tcgplayer(self, sealed_id: int, **params: Any) -> Iterator[TcgplayerListing]:
+        return paginate_cursor(lambda cursor: self.tcgplayer(sealed_id, **{**params, "cursor": cursor}))
+
+    def all_tcgplayer(self, sealed_id: int, **params: Any) -> List[TcgplayerListing]:
+        return list(self.iterate_tcgplayer(sealed_id, **params))
+
+
 class SealedResource:
     def __init__(self, transport: SyncTransport) -> None:
         self._t = transport
+        self.listings = SealedListingsResource(transport)
 
     def list(
         self, *, set_id: int | None = None, name: str | None = None, language: str | None = None,
