@@ -99,6 +99,34 @@ never graded, so `graded`, `grader`, and `grade` aren't accepted there and
 `grader`/`grade` come back `None`. The async client mirrors all of these on
 `AsyncPkmnPrices`.
 
+## Languages
+
+A card's language comes from its set, and it decides what pricing that card can
+ever have.
+
+| Language | Cards | Pricing | Plan |
+|----------|-------|---------|------|
+| English | 28,158 | USD (TCGplayer, eBay) + EUR (Cardmarket) | Free |
+| Japanese | 29,660 | USD + EUR | Pro+ |
+| German | 13,078 | EUR (Cardmarket) only | Pro+ |
+
+```python
+german = client.cards.list(language="German", currency="eur")
+```
+
+Spelling is normalised: `"German"`, `"german"`, `"de"` and `"DE"` all resolve to
+the same thing, and responses come back in the canonical form (`"German"`).
+
+**German cards have no USD price and never will** — TCGplayer does not sell
+German product. Asking for German with `currency="usd"` returns an empty list
+rather than an error, so reach for `"eur"`.
+
+A free key is limited to English. Asking for Japanese or German raises
+`ForbiddenError`, and omitting `language` returns English only rather than the
+whole catalogue.
+
+German coverage runs from HeartGold & SoulSilver (2010) to current sets.
+
 ## Currency
 
 Every price has a `currency` field. Pass `currency="usd"` or `currency="eur"` to filter, or leave it off to get everything your plan allows. EUR (Cardmarket) prices need a Pro plan; a free key asking for `eur` raises `ForbiddenError`.
