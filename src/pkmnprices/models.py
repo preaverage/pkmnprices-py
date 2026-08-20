@@ -144,6 +144,22 @@ class CardmarketListing(Model):
     language: str | None
     comment: str | None
     updated_at: str
+    # Cardmarket's per-listing special attributes. Any of these being True
+    # means the offer is real but does not contribute to the card's market
+    # price: a signed and altered Near Mint copy at EUR 200 must not set the
+    # Near Mint price of a card whose clean copies sell for EUR 3,800, and a
+    # slab is priced for the slab rather than for the card. So the cheapest
+    # row from cardmarket() is not necessarily the card's market_price --
+    # filter these out before deriving a price of your own.
+    signed: bool
+    altered: bool
+    graded: bool
+    # Slab details, named to match the graded eBay sale shape so "PSA 10"
+    # reads the same whichever source it came from. None unless graded is
+    # True, and possibly None even then: Cardmarket flags a slab without
+    # always naming the grader, and these are read from free-text comments.
+    grader: str | None
+    grade: str | None
 
 
 @dataclasses.dataclass
