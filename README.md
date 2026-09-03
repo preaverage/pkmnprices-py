@@ -218,6 +218,12 @@ the same thing, and responses come back in the canonical form (`"German"`).
 German product. Asking for German with `currency="usd"` returns an empty list
 rather than an error, so reach for `"eur"`.
 
+The same rule scopes Cardmarket listings. `cardmarket()` returns offers in the
+card's set language only, so an English card never returns German offers.
+cardmarket.com shows every language on one product page, so the cheapest offer
+here is usually higher than the "From" price a browser shows you. That is this
+feed being narrower, not a different product.
+
 A free key is limited to English. Asking for Japanese or German raises
 `ForbiddenError`, and omitting `language` returns English only rather than the
 whole catalogue.
