@@ -99,6 +99,77 @@ never graded, so `graded`, `grader`, and `grade` aren't accepted there and
 `grader`/`grade` come back `None`. The async client mirrors all of these on
 `AsyncPkmnPrices`.
 
+## Which card a comp is really about
+
+A variant and its base card can map to one source product page. When that
+happens, both serve the same sales, and the titles describe whichever printing
+the seller actually sold. Every eBay comp says which case it is:
+
+```python
+for sale in client.cards.listings.iterate_ebay(17679):
+    if sale.attribution == "shared":
+        continue  # another card's evidence
+    print(sale.variant, sale.title, sale.price)
+```
+
+`exact` means the source page belongs to this card alone. `shared` means the
+sale appears under at least one other card too, so it prices the group rather
+than this entity. `unknown` means the comp was collected before the source
+printing was recorded. A feed that is entirely `shared` is not evidence about
+the card you asked for.
+
+`variant` also works as a filter, so a card mapped for more than one printing
+can be read one printing at a time:
+
+```python
+holo = client.cards.listings.all_ebay(789, variant="Holofoil")
+```
+
+## Polling for new comps
+
+Credits are charged per row returned, so re-reading a page of comps you already
+hold to find out that nothing changed is the expensive way to stay current.
+`since` returns only what arrived after a point you name:
+
+```python
+checkpoint = "2026-09-01T02:40:15.126147Z"
+
+page = client.cards.listings.ebay(789, since=checkpoint)
+for sale in page.data:
+    print(sale.title, sale.price)
+if page.data:
+    checkpoint = page.data[0].ingested_at
+```
+
+Checkpoint on `ingested_at`, not `sold_at`. They are different: `sold_at` is
+when the sale happened, `ingested_at` is when we collected it, and a collection
+run regularly brings in sales that are weeks old. A sale-date bound would step
+over those permanently.
+
+The bound is exclusive, so passing back the `ingested_at` you were given never
+repeats that row. `since` also accepts a bare `YYYY-MM-DD` (midnight UTC),
+which suits a backfill more than a poll: re-running it the same day returns the
+same rows, and pays for them again.
+
+A card with nothing new returns an empty `data` list.
+
+## TCGplayer freshness
+
+`updated_at` on a TCGplayer offer is not a freshness signal. It moves only when
+that listing's own price, quantity or seller details change, so an offer that
+has been live and unchanged for a month keeps a month-old `updated_at` however
+recently it was confirmed.
+
+`snapshot_at` is the freshness field: when that product's listings were last
+confirmed against TCGplayer. It is the same for every row in a response, since
+a snapshot replaces a product's listings wholesale. Listings refresh daily, so
+a `snapshot_at` well over a day old means that product's last fetch did not
+succeed and you are looking at the previous snapshot.
+
+One thing `snapshot_at` cannot tell you: listings are collected from a US
+vantage point with no shipping-destination filter, so a response can contain
+offers TCGplayer's own site hides from you when you browse it from elsewhere.
+
 ## Cardmarket special attributes
 
 Cardmarket sells more than one kind of good under a single card. Every
