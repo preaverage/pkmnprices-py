@@ -301,6 +301,57 @@ def test_cardmarket_listings() -> None:
     assert "variant=Reverse+Holo" in captured["url"]
 
 
+def test_cardmarket_listing_special_attributes_and_sell_count() -> None:
+    """An unsealed offer and a no-sales seller are both excluded from the
+    market price, so a caller has to be able to tell them apart from a row
+    whose count was simply never recorded."""
+
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [
+            {
+                "id": 1, "article_id": 11, "price": 10.0, "variant": "",
+                "condition": None, "seller": "JapOn", "quantity": 1,
+                "language": "EN", "comment": "Not Sealed (open, just the booster)",
+                "updated_at": "2026-09-03T15:47:12+00:00",
+                "signed": False, "altered": False, "graded": False,
+                "grader": None, "grade": None,
+                "opened": True, "sell_count": 1210,
+            },
+            {
+                "id": 2, "article_id": 12, "price": 799.99, "variant": "",
+                "condition": None, "seller": "collector0913", "quantity": 1,
+                "language": "EN", "comment": "Sealed",
+                "updated_at": "2026-09-03T15:47:12+00:00",
+                "signed": False, "altered": False, "graded": False,
+                "grader": None, "grade": None,
+                "opened": False, "sell_count": 0,
+            },
+            {
+                "id": 3, "article_id": 13, "price": 850.0, "variant": "",
+                "condition": None, "seller": "Phima90", "quantity": 1,
+                "language": "EN", "comment": "Sealed - holo guaranteed",
+                "updated_at": "2026-09-03T15:47:12+00:00",
+                "signed": False, "altered": False, "graded": False,
+                "grader": None, "grade": None,
+                "opened": False, "sell_count": None,
+            },
+        ], "pagination": {"has_more": False, "next_cursor": None, "count": 3}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    offers = client.sealed.listings.all_cardmarket(1430)
+
+    assert [o.opened for o in offers] == [True, False, False]
+    # None and 0 must stay distinguishable: only 0 says the seller has sold
+    # nothing, and only that disqualifies an offer from setting a price.
+    assert [o.sell_count for o in offers] == [1210, 0, None]
+    assert offers[1].sell_count is not None
+    assert offers[2].sell_count is None
+    assert "/v1/sealed/1430/listings/cardmarket" in captured["url"]
+
+
 def test_retry_on_rate_limit_then_succeed() -> None:
     state = {"n": 0}
 

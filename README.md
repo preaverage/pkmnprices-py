@@ -83,15 +83,24 @@ for offer in client.cards.listings.iterate_tcgplayer(789, condition="Near Mint")
     print(offer.seller_name, offer.price, offer.shipping_price)
 ```
 
-Sealed products carry the same two listing sources, under `client.sealed.listings`:
+Sealed products carry the same three listing sources, under `client.sealed.listings`:
 
 ```python
 for offer in client.sealed.listings.iterate_tcgplayer(5678):
     print(offer.seller_name, offer.price, offer.quantity)
 
+for offer in client.sealed.listings.iterate_cardmarket(5678):
+    print(offer.seller, offer.price, offer.opened)
+
 for sale in client.sealed.listings.iterate_ebay(5678, sort="price_desc"):
     print(sale.title, sale.price, sale.sold_at)
 ```
+
+Sealed Cardmarket offers take no `variant`: every sealed row is written with an
+empty one, so the filter could only ever exclude everything. They are also
+single-language — the offers returned are the ones in the set's own language, so
+a Cardmarket product page showing offers in other languages lists more than this
+endpoint does.
 
 Sealed TCGplayer offers are normally condition `"Unopened"` with an empty
 `printing`, so those two filters rarely narrow anything. Sealed eBay sales are
@@ -173,7 +182,7 @@ offers TCGplayer's own site hides from you when you browse it from elsewhere.
 ## Cardmarket special attributes
 
 Cardmarket sells more than one kind of good under a single card. Every
-Cardmarket offer carries three booleans, and they are always present:
+Cardmarket offer carries four booleans, and they are always present:
 
 ```python
 for offer in client.cards.listings.iterate_cardmarket(789):
@@ -183,18 +192,45 @@ for offer in client.cards.listings.iterate_cardmarket(789):
         continue  # not a clean card
 ```
 
-A `signed`, `altered` or `graded` offer is real, and it is returned, but it does
-**not** contribute to the card's market price. A signed and altered Near Mint
-copy at EUR 200 must not set the Near Mint price of a card whose clean copies
-sell for EUR 3,800, and a slab is priced for the slab rather than for the card.
+A `signed`, `altered`, `graded` or `opened` offer is real, and it is returned,
+but it does **not** contribute to the market price. A signed and altered Near
+Mint copy at EUR 200 must not set the Near Mint price of a card whose clean
+copies sell for EUR 3,800, and a slab is priced for the slab rather than for the
+card.
 
 The practical consequence: **the cheapest row you get back is not necessarily
-the card's `market_price`.** Filter these out before deriving a price yourself.
+the `market_price`.** Filter these out before deriving a price yourself.
 
 `grader` and `grade` are named to match the graded eBay sale shape, so "PSA 10"
 reads the same whichever source it came from. Both are `None` unless `graded`
 is true, and can be `None` even then — Cardmarket flags a slab without always
 naming the grader, and the details are read from free-text seller comments.
+
+`opened` is the sealed-product member of the set: the seller's own comment says
+the item is not sealed. It is always `False` on a card. A Jungle booster pack
+whose every other offer sits between EUR 799 and EUR 950 carries one at
+EUR 10.00 reading *"Not Sealed (open, just the booster)"* — a real price for an
+opened pack, not a EUR 10 Jungle booster pack.
+
+## `sell_count`
+
+The other reason the cheapest row may not be the price. `sell_count` is the
+seller's completed sales, and an offer from a seller with no completed sales
+does not set a price.
+
+```python
+for offer in client.sealed.listings.iterate_cardmarket(1430):
+    if offer.opened:
+        continue  # not the sealed product
+    if offer.sell_count == 0:
+        continue  # no completed sales; sets no price
+    # offer.sell_count is None means no count was recorded -- not zero sales
+```
+
+**`None` is not zero.** `None` means no count was recorded for that row; `0`
+means Cardmarket reports the seller as having sold nothing. Treat only `0` as
+disqualifying — and note that `if not offer.sell_count` catches both, which is
+the mistake this distinction exists to prevent.
 
 ## Languages
 

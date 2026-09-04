@@ -74,6 +74,10 @@ def sealed_listings_tcgplayer(sealed_id: int, **query: Any) -> Request:
     return Request("GET", f"/v1/sealed/{sealed_id}/listings/tcgplayer", _clean(query))
 
 
+def sealed_listings_cardmarket(sealed_id: int, **query: Any) -> Request:
+    return Request("GET", f"/v1/sealed/{sealed_id}/listings/cardmarket", _clean(query))
+
+
 def build_page(raw: dict[str, Any], model: type[Model]) -> Page[Any]:
     items = [model.from_dict(item) for item in raw["data"]]
     return Page(items, PageInfo.from_dict(raw["pagination"]))
