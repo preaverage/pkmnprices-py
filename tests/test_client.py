@@ -154,6 +154,67 @@ def test_ebay_listings_graded_param() -> None:
     assert "grader=PSA" in captured["url"]
 
 
+def test_ebay_listings_carry_attribution_and_ingestion_time() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json({"data": [{"id": 1, "title": "Snorlax 051", "price": 10.0,
+                                "grader": None, "grade": None,
+                                "variant": "Holofoil", "attribution": "shared",
+                                "sold_at": "2025-01-01",
+                                "ingested_at": "2025-01-03T04:12:07Z",
+                                "listing_url": None}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    sale = client.cards.listings.ebay(17679).data[0]
+
+    # "shared" means this sale is also served under another card, so it prices
+    # the group rather than the entity that was asked for.
+    assert sale.attribution == "shared"
+    assert sale.variant == "Holofoil"
+    assert sale.ingested_at != sale.sold_at
+
+
+def test_ebay_listings_pass_variant_and_since() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [], "pagination": {"has_more": False, "next_cursor": None, "count": 0}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    client.cards.listings.ebay(789, variant="Holofoil", since="2026-09-01T02:40:15.126147Z")
+
+    url = httpx.URL(captured["url"])
+    assert dict(url.params)["variant"] == "Holofoil"
+    assert dict(url.params)["since"] == "2026-09-01T02:40:15.126147Z"
+
+    client.sealed.listings.ebay(5678, since="2026-09-01")
+    assert dict(httpx.URL(captured["url"]).params)["since"] == "2026-09-01"
+
+
+def test_tcgplayer_listings_carry_snapshot_time() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json({"data": [{"id": 1, "listing_id": 2, "printing": "Holofoil",
+                                "condition": "Near Mint", "language": "English",
+                                "price": 57.72, "shipping_price": 0.0,
+                                "seller_name": "CollectorsRealm", "seller_id": "1",
+                                "seller_rating": 100.0, "seller_sales": "5000",
+                                "quantity": 1, "listing_type": "standard",
+                                "direct_seller": False, "gold_seller": True,
+                                "verified_seller": True, "custom_title": None,
+                                "updated_at": "2026-09-01T02:40:15+00:00",
+                                "snapshot_at": "2026-09-03T02:41:12Z"}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    offer = client.cards.listings.tcgplayer(31194).data[0]
+
+    # updated_at is when the offer last changed, snapshot_at when we last
+    # looked. Reading the first as freshness is the mistake this field exists
+    # to prevent.
+    assert offer.updated_at == "2026-09-01T02:40:15+00:00"
+    assert offer.snapshot_at == "2026-09-03T02:41:12Z"
+
 def test_tcgplayer_listings() -> None:
     captured = {}
 

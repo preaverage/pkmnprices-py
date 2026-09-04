@@ -49,11 +49,21 @@ class AsyncCardListingsResource:
     async def ebay(
         self, card_id: int, *, graded: bool | None = None, grader: str | None = None,
         grade: str | None = None, min_price: float | None = None, max_price: float | None = None,
+        variant: str | None = None, since: str | None = None,
         sort: str | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[EbayListing]:
+        """Sold eBay comps for a card.
+
+        ``since`` returns only comps ingested after that instant, as an RFC 3339
+        timestamp or ``YYYY-MM-DD`` for midnight UTC. It filters on ingestion,
+        not on sale date: a sale-date bound would permanently step over comps
+        that arrive back-dated. Checkpoint on a row's ``ingested_at``, which is
+        exclusive, so passing it back never repeats that row.
+        """
         raw = await self._t.request(ep.cards_listings_ebay(
             card_id, graded=graded, grader=grader, grade=grade, min_price=min_price,
-            max_price=max_price, sort=sort, limit=limit, cursor=cursor,
+            max_price=max_price, variant=variant, since=since,
+            sort=sort, limit=limit, cursor=cursor,
         ))
         return ep.build_cursor_page(raw, EbayListing)
 
@@ -151,10 +161,17 @@ class AsyncSealedListingsResource:
     # Sealed eBay sales are never graded, so graded/grader/grade don't apply.
     async def ebay(
         self, sealed_id: int, *, min_price: float | None = None, max_price: float | None = None,
+        since: str | None = None,
         sort: str | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[EbayListing]:
+        """Sold eBay comps for a sealed product.
+
+        ``since`` returns only comps ingested after that instant, as an RFC 3339
+        timestamp or ``YYYY-MM-DD`` for midnight UTC. It filters on ingestion,
+        not on sale date. Checkpoint on a row's ``ingested_at``.
+        """
         raw = await self._t.request(ep.sealed_listings_ebay(
-            sealed_id, min_price=min_price, max_price=max_price,
+            sealed_id, min_price=min_price, max_price=max_price, since=since,
             sort=sort, limit=limit, cursor=cursor,
         ))
         return ep.build_cursor_page(raw, EbayListing)

@@ -8,6 +8,16 @@ Currency = Literal["USD", "EUR"]
 PriceSource = Literal["tcgplayer", "ebay", "cardmarket"]
 HealthStatus = Literal["healthy", "degraded", "unreachable"]
 
+# Whether a sold comp describes one card alone. A variant and its base card can
+# map to a single source product page, and when they do both serve the same
+# sales, with titles describing whichever printing the seller actually sold.
+#
+#   exact    the source page belongs to this card and no other
+#   shared   the sale appears under another card too, and its title may
+#            describe that printing; it prices the group, not this entity
+#   unknown  collected before the source printing was recorded
+ListingAttribution = Literal["exact", "shared", "unknown"]
+
 _hints_cache: dict[type, dict[str, Any]] = {}
 
 
@@ -127,8 +137,17 @@ class EbayListing(Model):
     title: str
     price: float
     grader: str | None
+    # Grades are strings and include halves ("9.5", "1.5"), so grade="9"
+    # matches PSA 9 and not BGS 9.5.
     grade: str | None
+    # The printing this comp was collected under, e.g. "Holofoil".
+    variant: str | None
+    attribution: ListingAttribution
     sold_at: str
+    # When we collected the sale, which is not when it sold: collection runs
+    # regularly bring in sales that are weeks old. This is the field to
+    # checkpoint on when polling `since`.
+    ingested_at: str
     listing_url: str | None
 
 
@@ -181,7 +200,14 @@ class TcgplayerListing(Model):
     gold_seller: bool | None
     verified_seller: bool | None
     custom_title: str | None
+    # When this listing's own fields last changed. Not a freshness signal: an
+    # offer live and unchanged for a month keeps a month-old value however
+    # recently it was confirmed. Read snapshot_at for that.
     updated_at: str
+    # When this product's listings were last confirmed against TCGplayer. The
+    # same for every row in a response, since a snapshot replaces a product's
+    # listings wholesale. None if no successful snapshot has been recorded.
+    snapshot_at: str | None
 
 
 @dataclasses.dataclass
