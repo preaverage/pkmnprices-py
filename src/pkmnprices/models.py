@@ -169,7 +169,8 @@ class CardmarketListing(Model):
     # Near Mint price of a card whose clean copies sell for EUR 3,800, and a
     # slab is priced for the slab rather than for the card. So the cheapest
     # row from cardmarket() is not necessarily the card's market_price --
-    # filter these out before deriving a price of your own.
+    # filter these out before deriving a price of your own, along with
+    # `opened` and any row whose `sell_count` is 0.
     signed: bool
     altered: bool
     graded: bool
@@ -179,6 +180,22 @@ class CardmarketListing(Model):
     # always naming the grader, and these are read from free-text comments.
     grader: str | None
     grade: str | None
+    # The offer's own seller says the item is not sealed -- an opened wrapper,
+    # or a display missing its shrink. Sealed products only; always False on a
+    # card listing, where the distinction does not exist. Same treatment as
+    # signed/altered/graded: a real offer, excluded from the market price. A
+    # Jungle booster pack whose every other offer sits between EUR 799 and
+    # EUR 950 carries one at EUR 10.00 reading "Not Sealed (open, just the
+    # booster)" -- a real price for an opened pack, not a EUR 10 booster pack.
+    opened: bool
+    # The seller's completed sales, as Cardmarket reports them. This is why a
+    # market_price can sit ABOVE the cheapest listing you can see: an offer
+    # from a seller with no completed sales does not set a price.
+    #
+    # None is not zero. None means no count was recorded for this row; 0 means
+    # Cardmarket reports the seller as having sold nothing. If you are
+    # reimplementing the price rule, treat only 0 as disqualifying.
+    sell_count: int | None
 
 
 @dataclasses.dataclass

@@ -201,6 +201,26 @@ class SealedListingsResource:
     def all_tcgplayer(self, sealed_id: int, **params: Any) -> List[TcgplayerListing]:
         return list(self.iterate_tcgplayer(sealed_id, **params))
 
+    # No variant filter, unlike the card endpoint: every sealed Cardmarket row
+    # is written with an empty variant, so the parameter could only ever
+    # exclude everything. `opened` is meaningful only on these rows.
+    def cardmarket(
+        self, sealed_id: int, *, condition: str | None = None,
+        min_price: float | None = None, max_price: float | None = None,
+        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+    ) -> CursorPage[CardmarketListing]:
+        raw = self._t.request(ep.sealed_listings_cardmarket(
+            sealed_id, condition=condition, min_price=min_price,
+            max_price=max_price, sort=sort, limit=limit, cursor=cursor,
+        ))
+        return ep.build_cursor_page(raw, CardmarketListing)
+
+    def iterate_cardmarket(self, sealed_id: int, **params: Any) -> Iterator[CardmarketListing]:
+        return paginate_cursor(lambda cursor: self.cardmarket(sealed_id, **{**params, "cursor": cursor}))
+
+    def all_cardmarket(self, sealed_id: int, **params: Any) -> List[CardmarketListing]:
+        return list(self.iterate_cardmarket(sealed_id, **params))
+
 
 class SealedResource:
     def __init__(self, transport: SyncTransport) -> None:
