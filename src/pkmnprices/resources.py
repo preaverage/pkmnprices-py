@@ -16,6 +16,7 @@ from .models import (
     SealedSummary,
     Set,
     TcgplayerListing,
+    TcgplayerSort,
 )
 from .pagination import paginate, paginate_cursor
 
@@ -93,7 +94,7 @@ class CardListingsResource:
     def tcgplayer(
         self, card_id: int, *, condition: str | None = None, language: str | None = None,
         printing: str | None = None, min_price: float | None = None, max_price: float | None = None,
-        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+        sort: TcgplayerSort | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[TcgplayerListing]:
         raw = self._t.request(ep.cards_listings_tcgplayer(
             card_id, condition=condition, language=language, printing=printing,
@@ -187,7 +188,7 @@ class SealedListingsResource:
     def tcgplayer(
         self, sealed_id: int, *, condition: str | None = None, language: str | None = None,
         printing: str | None = None, min_price: float | None = None, max_price: float | None = None,
-        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+        sort: TcgplayerSort | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[TcgplayerListing]:
         raw = self._t.request(ep.sealed_listings_tcgplayer(
             sealed_id, condition=condition, language=language, printing=printing,

@@ -260,6 +260,19 @@ def test_sealed_tcgplayer_listings() -> None:
     assert "sort=price_asc" in captured["url"]
 
 
+def test_card_tcgplayer_listings_total_sort() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [], "pagination": {"has_more": False, "next_cursor": None, "count": 0}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    assert client.cards.listings.all_tcgplayer(789, sort="total_asc") == []
+    assert "/v1/cards/789/listings/tcgplayer" in captured["url"]
+    assert "sort=total_asc" in captured["url"]
+
+
 def test_sealed_ebay_listings() -> None:
     captured = {}
 

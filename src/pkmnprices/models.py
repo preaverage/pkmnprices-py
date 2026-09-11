@@ -18,6 +18,14 @@ HealthStatus = Literal["healthy", "degraded", "unreachable"]
 #   unknown  collected before the source printing was recorded
 ListingAttribution = Literal["exact", "shared", "unknown"]
 
+# TCGplayer offers carry a shipping price, so they can be ordered by what a
+# buyer actually pays. price_asc / price_desc order by item price alone;
+# total_asc / total_desc order by price + shipping_price, which is how
+# TCGplayer's own site orders offers, so total_asc puts the true cheapest
+# offer first. A cursor is bound to the sort family it was issued under, and
+# min_price / max_price filter item price under every sort.
+TcgplayerSort = Literal["price_asc", "price_desc", "total_asc", "total_desc"]
+
 _hints_cache: dict[type, dict[str, Any]] = {}
 
 
@@ -128,7 +136,6 @@ class PriceHistoryPoint(Model):
     avg: float
     low: float
     high: float
-    sale_count: int
 
 
 @dataclasses.dataclass

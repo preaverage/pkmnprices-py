@@ -30,9 +30,10 @@ from .models import (
     Set,
     SetRef,
     TcgplayerListing,
+    TcgplayerSort,
 )
 
-__version__ = "3.4.0"
+__version__ = "4.0.0"
 
 __all__ = [
     "PkmnPrices",
@@ -65,4 +66,5 @@ __all__ = [
     "Set",
     "SetRef",
     "TcgplayerListing",
+    "TcgplayerSort",
 ]

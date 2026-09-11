@@ -83,6 +83,20 @@ for offer in client.cards.listings.iterate_tcgplayer(789, condition="Near Mint")
     print(offer.seller_name, offer.price, offer.shipping_price)
 ```
 
+TCGplayer offers default to `price_asc`, item price alone, so the first row can
+be a low-price, high-shipping offer that is not the cheapest to buy. `total_asc`
+and `total_desc` order by `price + shipping_price`, which is how TCGplayer's own
+site orders offers:
+
+```python
+for offer in client.cards.listings.iterate_tcgplayer(789, sort="total_asc"):
+    print(offer.price + (offer.shipping_price or 0), offer.seller_name)
+```
+
+A cursor is bound to the sort family it was issued under, so do not reuse a
+`total_*` cursor with a `price_*` sort or the reverse. `min_price` and
+`max_price` filter item price under every sort.
+
 Sealed products carry the same three listing sources, under `client.sealed.listings`:
 
 ```python
