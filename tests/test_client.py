@@ -31,7 +31,8 @@ def test_auth_header_and_query() -> None:
 
 def test_forbidden_maps_to_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return _json({"error": {"code": "forbidden", "message": "needs pro"}}, 403)
+        return _json({"error": {"code": "forbidden", "message": "needs pro",
+                                "docs_url": "https://www.pkmnprices.com/pricing"}}, 403)
 
     client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
     with pytest.raises(ForbiddenError) as exc:
@@ -39,6 +40,44 @@ def test_forbidden_maps_to_error() -> None:
 
     assert exc.value.status == 403
     assert exc.value.code == "forbidden"
+    assert exc.value.docs_url == "https://www.pkmnprices.com/pricing"
+
+
+def test_error_without_docs_url() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json({"error": {"code": "forbidden", "message": "needs pro"}}, 403)
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    with pytest.raises(ForbiddenError) as exc:
+        client.cards.get(1, currency="eur")
+    assert exc.value.docs_url is None
+
+
+def test_price_history_passes_condition_and_variant() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [], "pagination": {"page": 1, "per_page": 30, "total": 0, "total_pages": 0}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    client.cards.price_history(789, condition="Near Mint", variant="Holofoil")
+    assert "condition=Near+Mint" in captured["url"]
+    assert "variant=Holofoil" in captured["url"]
+
+
+def test_ebay_listing_carries_grade_qualifier() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json({"data": [{"id": 1, "title": "CGC 10 Pristine", "price": 900.0, "grader": "CGC",
+                                "grade": "10", "grade_qualifier": "Pristine", "variant": "Holofoil",
+                                "attribution": "exact", "sold_at": "2026-08-01",
+                                "ingested_at": "2026-08-02T00:00:00Z", "listing_url": None}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    sale = client.cards.listings.ebay(789, grader="CGC", grade="10").data[0]
+    assert sale.grade == "10"
+    assert sale.grade_qualifier == "Pristine"
 
 
 def test_sealed_get_passes_currency() -> None:
@@ -258,6 +297,19 @@ def test_sealed_tcgplayer_listings() -> None:
     assert listings[0].condition == "Unopened"
     assert "/v1/sealed/5678/listings/tcgplayer" in captured["url"]
     assert "sort=price_asc" in captured["url"]
+
+
+def test_card_tcgplayer_listings_total_sort() -> None:
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [], "pagination": {"has_more": False, "next_cursor": None, "count": 0}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    assert client.cards.listings.all_tcgplayer(789, sort="total_asc") == []
+    assert "/v1/cards/789/listings/tcgplayer" in captured["url"]
+    assert "sort=total_asc" in captured["url"]
 
 
 def test_sealed_ebay_listings() -> None:

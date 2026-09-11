@@ -83,6 +83,20 @@ for offer in client.cards.listings.iterate_tcgplayer(789, condition="Near Mint")
     print(offer.seller_name, offer.price, offer.shipping_price)
 ```
 
+TCGplayer offers default to `price_asc`, item price alone, so the first row can
+be a low-price, high-shipping offer that is not the cheapest to buy. `total_asc`
+and `total_desc` order by `price + shipping_price`, which is how TCGplayer's own
+site orders offers:
+
+```python
+for offer in client.cards.listings.iterate_tcgplayer(789, sort="total_asc"):
+    print(offer.price + (offer.shipping_price or 0), offer.seller_name)
+```
+
+A cursor is bound to the sort family it was issued under, so do not reuse a
+`total_*` cursor with a `price_*` sort or the reverse. `min_price` and
+`max_price` filter item price under every sort.
+
 Sealed products carry the same three listing sources, under `client.sealed.listings`:
 
 ```python
@@ -132,6 +146,19 @@ can be read one printing at a time:
 
 ```python
 holo = client.cards.listings.all_ebay(789, variant="Holofoil")
+```
+
+## Two grades can print the same number
+
+A CGC Pristine 10 and a CGC Gem Mint 10 both carry `grade == "10"`, and so do
+a BGS Black Label 10 and a plain BGS 10. The higher tier sells well above the
+lower one, so `grade_qualifier` tells them apart: `"Pristine"`, `"Black Label"`,
+or `None` for the tier with no name of its own, which is nearly every comp.
+Filtering `grade="10"` returns every tier; split the population yourself:
+
+```python
+tens = client.cards.listings.all_ebay(789, grader="CGC", grade="10")
+pristine = [s for s in tens if s.grade_qualifier == "Pristine"]
 ```
 
 ## Polling for new comps
@@ -301,7 +328,7 @@ Both fields are `None` until the product has been mapped.
 
 ## Errors
 
-Everything raised subclasses `PkmnPricesError`, which carries `status`, `code`, `rate_limit`, and `retry_after`.
+Everything raised subclasses `PkmnPricesError`, which carries `status`, `code`, `docs_url`, `rate_limit`, and `retry_after`. `docs_url` is the docs page for that class of error as sent by the API, so a 401 points at authentication, a 403 at pricing and a 429 at rate limits; it is `None` when the response had no body to read it from.
 
 ```python
 from pkmnprices import ForbiddenError, NotFoundError, RateLimitError

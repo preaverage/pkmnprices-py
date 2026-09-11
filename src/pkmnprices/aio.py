@@ -16,6 +16,7 @@ from .models import (
     SealedSummary,
     Set,
     TcgplayerListing,
+    TcgplayerSort,
 )
 from .pagination import paginate_async, paginate_cursor_async
 
@@ -93,7 +94,7 @@ class AsyncCardListingsResource:
     async def tcgplayer(
         self, card_id: int, *, condition: str | None = None, language: str | None = None,
         printing: str | None = None, min_price: float | None = None, max_price: float | None = None,
-        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+        sort: TcgplayerSort | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[TcgplayerListing]:
         raw = await self._t.request(ep.cards_listings_tcgplayer(
             card_id, condition=condition, language=language, printing=printing,
@@ -119,7 +120,8 @@ class AsyncCardsResource:
         stage: str | None = None, card_type: str | None = None, weakness: str | None = None,
         energy_type: str | None = None,
         language: str | None = None, currency: str | None = None, condition: str | None = None,
-        variant: str | None = None, grade: str | None = None, min_price: float | None = None,
+        variant: str | None = None, grader: str | None = None, grade: str | None = None,
+        min_price: float | None = None,
         max_price: float | None = None, sort: str | None = None,
         page: int | None = None, per_page: int | None = None,
     ) -> Page[CardSummary]:
@@ -127,7 +129,7 @@ class AsyncCardsResource:
             name=name, set_id=set_id, tcg_player_id=tcg_player_id, number=number,
             total_set_number=total_set_number, rarity=rarity, stage=stage, card_type=card_type,
             weakness=weakness, energy_type=energy_type, language=language, currency=currency,
-            condition=condition, variant=variant, grade=grade, min_price=min_price,
+            condition=condition, variant=variant, grader=grader, grade=grade, min_price=min_price,
             max_price=max_price, sort=sort, page=page, per_page=per_page,
         ))
         return ep.build_page(raw, CardSummary)
@@ -144,9 +146,13 @@ class AsyncCardsResource:
 
     async def price_history(
         self, card_id: int, *, period: str | None = None, currency: str | None = None,
+        condition: str | None = None, variant: str | None = None,
         limit: int | None = None, page: int | None = None,
     ) -> Page[PriceHistoryPoint]:
-        raw = await self._t.request(ep.cards_history(card_id, period=period, currency=currency, limit=limit, page=page))
+        raw = await self._t.request(ep.cards_history(
+            card_id, period=period, currency=currency, condition=condition, variant=variant,
+            limit=limit, page=page,
+        ))
         return ep.build_page(raw, PriceHistoryPoint)
 
     def iterate_price_history(self, card_id: int, **params: Any) -> AsyncIterator[PriceHistoryPoint]:
@@ -187,7 +193,7 @@ class AsyncSealedListingsResource:
     async def tcgplayer(
         self, sealed_id: int, *, condition: str | None = None, language: str | None = None,
         printing: str | None = None, min_price: float | None = None, max_price: float | None = None,
-        sort: str | None = None, limit: int | None = None, cursor: str | None = None,
+        sort: TcgplayerSort | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[TcgplayerListing]:
         raw = await self._t.request(ep.sealed_listings_tcgplayer(
             sealed_id, condition=condition, language=language, printing=printing,
@@ -250,7 +256,11 @@ class AsyncSealedResource:
 
     async def price_history(
         self, sealed_id: int, *, period: str | None = None, currency: str | None = None,
+        condition: str | None = None, variant: str | None = None,
         limit: int | None = None, page: int | None = None,
     ) -> Page[PriceHistoryPoint]:
-        raw = await self._t.request(ep.sealed_history(sealed_id, period=period, currency=currency, limit=limit, page=page))
+        raw = await self._t.request(ep.sealed_history(
+            sealed_id, period=period, currency=currency, condition=condition, variant=variant,
+            limit=limit, page=page,
+        ))
         return ep.build_page(raw, PriceHistoryPoint)

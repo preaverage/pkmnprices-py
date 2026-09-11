@@ -18,12 +18,17 @@ class PkmnPricesError(Exception):
         *,
         status: int,
         code: str,
+        docs_url: str | None = None,
         rate_limit: RateLimitInfo | None = None,
         retry_after: float | None = None,
     ) -> None:
         super().__init__(message)
         self.status = status
         self.code = code
+        # The docs page for this class of error, as sent by the API: a 401
+        # points at authentication, a 403 at pricing, a 429 at rate limits.
+        # None when the response carried no body to read it from.
+        self.docs_url = docs_url
         self.rate_limit = rate_limit or RateLimitInfo()
         self.retry_after = retry_after
 
@@ -59,6 +64,7 @@ def create_api_error(
     status: int,
     code: str,
     message: str,
+    docs_url: str | None,
     rate_limit: RateLimitInfo,
     retry_after: float | None,
 ) -> PkmnPricesError:
@@ -74,6 +80,7 @@ def create_api_error(
         message,
         status=status,
         code=code,
+        docs_url=docs_url,
         rate_limit=rate_limit,
         retry_after=retry_after,
     )

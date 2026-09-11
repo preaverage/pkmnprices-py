@@ -18,6 +18,14 @@ HealthStatus = Literal["healthy", "degraded", "unreachable"]
 #   unknown  collected before the source printing was recorded
 ListingAttribution = Literal["exact", "shared", "unknown"]
 
+# TCGplayer offers carry a shipping price, so they can be ordered by what a
+# buyer actually pays. price_asc / price_desc order by item price alone;
+# total_asc / total_desc order by price + shipping_price, which is how
+# TCGplayer's own site orders offers, so total_asc puts the true cheapest
+# offer first. A cursor is bound to the sort family it was issued under, and
+# min_price / max_price filter item price under every sort.
+TcgplayerSort = Literal["price_asc", "price_desc", "total_asc", "total_desc"]
+
 _hints_cache: dict[type, dict[str, Any]] = {}
 
 
@@ -128,7 +136,6 @@ class PriceHistoryPoint(Model):
     avg: float
     low: float
     high: float
-    sale_count: int
 
 
 @dataclasses.dataclass
@@ -140,6 +147,13 @@ class EbayListing(Model):
     # Grades are strings and include halves ("9.5", "1.5"), so grade="9"
     # matches PSA 9 and not BGS 9.5.
     grade: str | None
+    # Which tier of `grade` this is, when the grader issues more than one at
+    # that number: "Pristine" for a CGC 10 that is not a Gem Mint, "Black
+    # Label" for a BGS 10 that is not a plain 10. A Pristine ten sells well
+    # above a Gem Mint ten. None for the tier with no name of its own, which
+    # is nearly every comp, and for comps collected before the tier was
+    # recorded. grade="10" still matches every tier; split them on this.
+    grade_qualifier: str | None
     # The printing this comp was collected under, e.g. "Holofoil".
     variant: str | None
     attribution: ListingAttribution
