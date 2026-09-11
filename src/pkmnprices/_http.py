@@ -71,10 +71,13 @@ def _handle(response: httpx.Response, path: str) -> Any:
         else f"Request to {path} failed with status {response.status_code}"
     )
 
+    docs_url = body["error"].get("docs_url") if has_error else None
+
     raise create_api_error(
         status=response.status_code,
         code=code,
         message=message,
+        docs_url=docs_url if isinstance(docs_url, str) else None,
         rate_limit=rate_limit,
         retry_after=_retry_after(response.headers),
     )
