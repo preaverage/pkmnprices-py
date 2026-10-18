@@ -2,7 +2,17 @@ from __future__ import annotations
 
 import dataclasses
 import types as _types
-from typing import Any, Generic, Literal, TypeVar, Union, get_args, get_origin, get_type_hints
+from collections.abc import Sequence
+from typing import (
+    Any,
+    Generic,
+    Literal,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 Currency = Literal["USD", "EUR"]
 PriceSource = Literal["tcgplayer", "ebay", "cardmarket"]
@@ -15,8 +25,25 @@ HealthStatus = Literal["healthy", "degraded", "unreachable"]
 #   exact    the source page belongs to this card and no other
 #   shared   the sale appears under another card too, and its title may
 #            describe that printing; it prices the group, not this entity
-#   unknown  collected before the source printing was recorded
+#   unknown  no printing is recorded for this comp: it was collected before
+#            printings were recorded, or its title did not narrow the sale
+#            to one printing
 ListingAttribution = Literal["exact", "shared", "unknown"]
+
+# How an eBay comp sold. fixed_price includes listings that allowed offers but
+# sold at the listed price. For best_offer_accepted, price is what the buyer
+# paid.
+SaleType = Literal["auction", "fixed_price", "best_offer_accepted"]
+
+# The grade_qualifier filter on card eBay comps. pristine is a CGC Pristine 10,
+# black_label a BGS Black Label 10, and none the tier with no name of its own
+# (a plain CGC or BGS 10, and every other grade). none also returns comps
+# whose tier was never recorded.
+GradeQualifierFilter = Literal["pristine", "black_label", "none"]
+
+# The seller_country and exclude_seller_country filters: ISO 3166-1 alpha-2
+# codes as a list or a comma-separated string ("US,JP"), at most 30.
+Countries = str | Sequence[str]
 
 # TCGplayer offers carry a shipping price, so they can be ordered by what a
 # buyer actually pays. price_asc / price_desc order by item price alone;
@@ -152,7 +179,8 @@ class EbayListing(Model):
     # Label" for a BGS 10 that is not a plain 10. A Pristine ten sells well
     # above a Gem Mint ten. None for the tier with no name of its own, which
     # is nearly every comp, and for comps collected before the tier was
-    # recorded. grade="10" still matches every tier; split them on this.
+    # recorded. grade="10" still matches every tier; split them on this, or
+    # pass the grade_qualifier filter.
     grade_qualifier: str | None
     # The printing this comp was collected under, e.g. "Holofoil".
     variant: str | None
@@ -163,6 +191,19 @@ class EbayListing(Model):
     # checkpoint on when polling `since`.
     ingested_at: str
     listing_url: str | None
+    # The currency of `price`, per comp: USD for ebay.com, EUR for German and
+    # Spanish card comps from ebay.de and ebay.es. Sealed comps are always USD.
+    currency: Currency
+    # The seller's location as an uppercase ISO 3166-1 alpha-2 code, such as
+    # "US" or "JP". Puerto Rico is "PR". None when the location is unknown,
+    # which covers older comps, some comps mirrored from PriceCharting, and
+    # locations that don't match a country. Always None on sealed comps.
+    seller_country: str | None
+    # None for comps collected before the field existed, comps mirrored from
+    # PriceCharting, and sealed comps. Older accepted offers can still carry
+    # the list price in `price` with nothing marking them, so pass every
+    # sale_type value as a filter to leave the None rows out.
+    sale_type: SaleType | None
 
 
 @dataclasses.dataclass
@@ -210,6 +251,11 @@ class CardmarketListing(Model):
     # Cardmarket reports the seller as having sold nothing. If you are
     # reimplementing the price rule, treat only 0 as disqualifying.
     sell_count: int | None
+    # The seller's location as an uppercase ISO 3166-1 alpha-2 code, such as
+    # "IT" or "DE", read from the offer's item-location flag. Same meaning as
+    # seller_country on eBay comps. None for offers scraped before the field
+    # existed, offers that show no location, and unmatched countries.
+    seller_country: str | None
 
 
 @dataclasses.dataclass

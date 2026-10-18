@@ -137,8 +137,9 @@ for sale in client.cards.listings.iterate_ebay(17679):
 
 `exact` means the source page belongs to this card alone. `shared` means the
 sale appears under at least one other card too, so it prices the group rather
-than this entity. `unknown` means the comp was collected before the source
-printing was recorded. A feed that is entirely `shared` is not evidence about
+than this entity. `unknown` means no printing is recorded for the comp: it was
+collected before printings were recorded, or its title did not narrow the sale
+to one printing. A feed that is entirely `shared` is not evidence about
 the card you asked for.
 
 `variant` also works as a filter, so a card mapped for more than one printing
@@ -154,11 +155,52 @@ A CGC Pristine 10 and a CGC Gem Mint 10 both carry `grade == "10"`, and so do
 a BGS Black Label 10 and a plain BGS 10. The higher tier sells well above the
 lower one, so `grade_qualifier` tells them apart: `"Pristine"`, `"Black Label"`,
 or `None` for the tier with no name of its own, which is nearly every comp.
-Filtering `grade="10"` returns every tier; split the population yourself:
+Filtering `grade="10"` returns every tier. To get one tier, add
+`grade_qualifier`:
 
 ```python
-tens = client.cards.listings.all_ebay(789, grader="CGC", grade="10")
-pristine = [s for s in tens if s.grade_qualifier == "Pristine"]
+black_labels = client.cards.listings.all_ebay(
+    789, grader="BGS", grade="10", grade_qualifier="black_label",
+)
+plain_tens = client.cards.listings.all_ebay(
+    789, grader="BGS", grade="10", grade_qualifier="none",
+)
+```
+
+`"none"` also returns comps whose tier was never recorded.
+
+## Comp currency, seller country and sale type
+
+eBay comps carry their own `currency`. Card comps from ebay.com are USD, and
+German and Spanish card comps from ebay.de and ebay.es are EUR, so read it per
+row rather than assuming dollars. Sealed comps are always USD.
+
+`seller_country` is the seller's location as an ISO 3166-1 alpha-2 code
+(`"US"`, `"JP"`, `"GB"`), or `None` when it isn't known. Cardmarket offers
+carry it too, read from the offer's item-location flag. Both listing feeds
+accept the same two filters, as a list or a comma-separated string of up to
+30 codes:
+
+```python
+domestic = client.cards.listings.all_ebay(789, seller_country=["US", "PR"])
+no_china = client.cards.listings.all_cardmarket(789, exclude_seller_country="CN,HK")
+```
+
+`seller_country` leaves out rows with no known country; `exclude_seller_country`
+keeps them. A malformed code raises `BadRequestError`.
+
+`sale_type` says how an eBay comp sold: `"auction"`, `"fixed_price"` or
+`"best_offer_accepted"`. For an accepted offer, `price` is what the buyer paid,
+not the list price. It is `None` on older comps, comps mirrored from
+PriceCharting and sealed comps, and some older accepted offers still carry the
+list price with nothing marking them. Any `sale_type` filter drops the `None`
+rows, so passing all three values keeps only comps whose sale type is known:
+
+```python
+auctions = client.cards.listings.all_ebay(789, sale_type="auction")
+known = client.cards.listings.all_ebay(
+    789, sale_type=["auction", "fixed_price", "best_offer_accepted"],
+)
 ```
 
 ## Polling for new comps
@@ -269,6 +311,7 @@ ever have.
 | English | 28,158 | USD (TCGplayer, eBay) + EUR (Cardmarket) | Free |
 | Japanese | 29,660 | USD + EUR | Pro+ |
 | German | 13,078 | EUR (Cardmarket) only | Pro+ |
+| Spanish | 12,419 | EUR (Cardmarket) only | Pro+ |
 
 ```python
 german = client.cards.list(language="German", currency="eur")
@@ -276,22 +319,28 @@ german = client.cards.list(language="German", currency="eur")
 
 Spelling is normalised: `"German"`, `"german"`, `"de"` and `"DE"` all resolve to
 the same thing, and responses come back in the canonical form (`"German"`).
+Spanish takes `"Spanish"`, `"Español"`, `"espanol"`, `"spa"` and `"es"`.
 
-**German cards have no USD price and never will** — TCGplayer does not sell
-German product. Asking for German with `currency="usd"` returns an empty list
-rather than an error, so reach for `"eur"`.
+**German and Spanish cards have no USD price and never will**, because
+TCGplayer sells neither. Asking for either with `currency="usd"` returns an
+empty list rather than an error, so reach for `"eur"`.
 
 The same rule scopes Cardmarket listings. `cardmarket()` returns offers in the
-card's set language only, so an English card never returns German offers.
+card's set language only, so an English card never returns German or Spanish
+offers.
 cardmarket.com shows every language on one product page, so the cheapest offer
 here is usually higher than the "From" price a browser shows you. That is this
 feed being narrower, not a different product.
 
-A free key is limited to English. Asking for Japanese or German raises
+A free key is limited to English. Asking for Japanese, German or Spanish raises
 `ForbiddenError`, and omitting `language` returns English only rather than the
 whole catalogue.
 
-German coverage runs from HeartGold & SoulSilver (2010) to current sets.
+German coverage runs from HeartGold & SoulSilver (2010) to current sets, and
+Spanish from Black & White (2011). Spanish price history only goes back to when
+Spanish pricing started, so it is shorter than the other languages'. A Spanish
+card with no Cardmarket offer in Spanish yet has no price, which is missing
+data, not a zero.
 
 ## Currency
 
@@ -342,6 +391,9 @@ except NotFoundError:
 except RateLimitError:
     ...  # ran out of retries
 ```
+
+A 401 comes back with `code` set to `missing_api_key` when no key was sent and
+`invalid_api_key` when the key doesn't match one, both as `UnauthorizedError`.
 
 Subclasses: `BadRequestError` (400), `UnauthorizedError` (401), `ForbiddenError` (403), `NotFoundError` (404), `ConflictError` (409), `CreditLimitError` and `RateLimitError` (429), `InternalServerError` (5xx), `APIConnectionError` (network/timeout).
 

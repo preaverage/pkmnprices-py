@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, List
+from typing import Any, AsyncIterator, List, Sequence
 
 from . import _endpoints as ep
 from ._http import AsyncTransport
@@ -8,10 +8,13 @@ from .models import (
     Card,
     CardmarketListing,
     CardSummary,
+    Countries,
     CursorPage,
     EbayListing,
+    GradeQualifierFilter,
     Page,
     PriceHistoryPoint,
+    SaleType,
     Sealed,
     SealedSummary,
     Set,
@@ -51,6 +54,9 @@ class AsyncCardListingsResource:
         self, card_id: int, *, graded: bool | None = None, grader: str | None = None,
         grade: str | None = None, min_price: float | None = None, max_price: float | None = None,
         variant: str | None = None, since: str | None = None,
+        seller_country: Countries | None = None, exclude_seller_country: Countries | None = None,
+        grade_qualifier: GradeQualifierFilter | None = None,
+        sale_type: SaleType | Sequence[SaleType] | None = None,
         sort: str | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[EbayListing]:
         """Sold eBay comps for a card.
@@ -60,10 +66,18 @@ class AsyncCardListingsResource:
         not on sale date: a sale-date bound would permanently step over comps
         that arrive back-dated. Checkpoint on a row's ``ingested_at``, which is
         exclusive, so passing it back never repeats that row.
+
+        ``seller_country`` and ``exclude_seller_country`` take ISO 3166-1
+        alpha-2 codes as a list or a comma-separated string, at most 30.
+        ``seller_country`` leaves out comps with no known country;
+        ``exclude_seller_country`` keeps them. ``sale_type`` takes one value or
+        a list, and leaves out comps whose sale type is unknown.
         """
         raw = await self._t.request(ep.cards_listings_ebay(
             card_id, graded=graded, grader=grader, grade=grade, min_price=min_price,
             max_price=max_price, variant=variant, since=since,
+            seller_country=seller_country, exclude_seller_country=exclude_seller_country,
+            grade_qualifier=grade_qualifier, sale_type=sale_type,
             sort=sort, limit=limit, cursor=cursor,
         ))
         return ep.build_cursor_page(raw, EbayListing)
@@ -77,11 +91,13 @@ class AsyncCardListingsResource:
     async def cardmarket(
         self, card_id: int, *, condition: str | None = None, variant: str | None = None,
         min_price: float | None = None, max_price: float | None = None,
+        seller_country: Countries | None = None, exclude_seller_country: Countries | None = None,
         sort: str | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[CardmarketListing]:
         raw = await self._t.request(ep.cards_listings_cardmarket(
             card_id, condition=condition, variant=variant, min_price=min_price,
-            max_price=max_price, sort=sort, limit=limit, cursor=cursor,
+            max_price=max_price, seller_country=seller_country,
+            exclude_seller_country=exclude_seller_country, sort=sort, limit=limit, cursor=cursor,
         ))
         return ep.build_cursor_page(raw, CardmarketListing)
 
@@ -213,11 +229,13 @@ class AsyncSealedListingsResource:
     async def cardmarket(
         self, sealed_id: int, *, condition: str | None = None,
         min_price: float | None = None, max_price: float | None = None,
+        seller_country: Countries | None = None, exclude_seller_country: Countries | None = None,
         sort: str | None = None, limit: int | None = None, cursor: str | None = None,
     ) -> CursorPage[CardmarketListing]:
         raw = await self._t.request(ep.sealed_listings_cardmarket(
             sealed_id, condition=condition, min_price=min_price,
-            max_price=max_price, sort=sort, limit=limit, cursor=cursor,
+            max_price=max_price, seller_country=seller_country,
+            exclude_seller_country=exclude_seller_country, sort=sort, limit=limit, cursor=cursor,
         ))
         return ep.build_cursor_page(raw, CardmarketListing)
 

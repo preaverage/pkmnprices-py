@@ -231,6 +231,77 @@ def test_ebay_listings_pass_variant_and_since() -> None:
     assert dict(httpx.URL(captured["url"]).params)["since"] == "2026-09-01"
 
 
+def test_ebay_listings_carry_currency_seller_country_and_sale_type() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json({"data": [{"id": 9012, "title": "Mega-Glurak X ex 125/094", "price": 900.0,
+                                "currency": "EUR", "seller_country": None,
+                                "sale_type": "best_offer_accepted",
+                                "grader": "AOG", "grade": "10", "grade_qualifier": None,
+                                "variant": None, "attribution": "exact",
+                                "sold_at": "2026-08-24",
+                                "ingested_at": "2026-09-17T11:30:15Z",
+                                "listing_url": None}],
+                      "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    sale = client.cards.listings.ebay(31194).data[0]
+
+    assert sale.currency == "EUR"
+    assert sale.seller_country is None
+    assert sale.sale_type == "best_offer_accepted"
+
+
+def test_ebay_listings_pass_country_qualifier_and_sale_type_filters() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [], "pagination": {"has_more": False, "next_cursor": None, "count": 0}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    client.cards.listings.ebay(
+        789, grader="BGS", grade="10", grade_qualifier="black_label",
+        seller_country=["US", "PR"], exclude_seller_country="CN,HK",
+        sale_type=["auction", "best_offer_accepted"],
+    )
+
+    params = dict(httpx.URL(captured["url"]).params)
+    assert params["grade_qualifier"] == "black_label"
+    assert params["seller_country"] == "US,PR"
+    assert params["exclude_seller_country"] == "CN,HK"
+    assert params["sale_type"] == "auction,best_offer_accepted"
+
+    client.cards.listings.ebay(789, sale_type="auction")
+    assert dict(httpx.URL(captured["url"]).params)["sale_type"] == "auction"
+
+
+def test_cardmarket_listings_seller_country() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return _json({"data": [{
+            "id": 3456, "article_id": 1789012345, "price": 38.5,
+            "variant": "Reverse Holofoil", "condition": "Near Mint",
+            "seller": "CardKingdomEU", "quantity": 2, "language": "EN",
+            "comment": None, "updated_at": "2026-08-11T14:22:00+00:00",
+            "signed": False, "altered": False, "graded": False,
+            "grader": None, "grade": None, "opened": False, "sell_count": 2022,
+            "seller_country": "IT",
+        }], "pagination": {"has_more": False, "next_cursor": None, "count": 1}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    offer = client.cards.listings.cardmarket(789, seller_country=["it", "de"]).data[0]
+
+    assert offer.seller_country == "IT"
+    assert dict(httpx.URL(captured["url"]).params)["seller_country"] == "it,de"
+
+    client.sealed.listings.cardmarket(1430, exclude_seller_country=["CN"])
+    params = dict(httpx.URL(captured["url"]).params)
+    assert params["exclude_seller_country"] == "CN"
+    assert "seller_country" not in params
+
+
 def test_tcgplayer_listings_carry_snapshot_time() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return _json({"data": [{"id": 1, "listing_id": 2, "printing": "Holofoil",
