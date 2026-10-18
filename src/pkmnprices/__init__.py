@@ -16,15 +16,18 @@ from .models import (
     Card,
     CardmarketListing,
     CardSummary,
+    Countries,
     CursorInfo,
     CursorPage,
     EbayListing,
+    GradeQualifierFilter,
     ListingAttribution,
     Health,
     Page,
     PageInfo,
     Price,
     PriceHistoryPoint,
+    SaleType,
     Sealed,
     SealedSummary,
     Set,
@@ -33,7 +36,7 @@ from .models import (
     TcgplayerSort,
 )
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 
 __all__ = [
     "PkmnPrices",
@@ -52,15 +55,18 @@ __all__ = [
     "Card",
     "CardmarketListing",
     "CardSummary",
+    "Countries",
     "CursorInfo",
     "CursorPage",
     "EbayListing",
+    "GradeQualifierFilter",
     "ListingAttribution",
     "Health",
     "Page",
     "PageInfo",
     "Price",
     "PriceHistoryPoint",
+    "SaleType",
     "Sealed",
     "SealedSummary",
     "Set",

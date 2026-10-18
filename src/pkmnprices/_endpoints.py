@@ -15,7 +15,12 @@ class Request:
 
 
 def _clean(query: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in query.items() if value is not None}
+    # List filters (seller_country, sale_type) are comma-separated on the wire.
+    return {
+        key: ",".join(value) if isinstance(value, (list, tuple)) else value
+        for key, value in query.items()
+        if value is not None
+    }
 
 
 def health() -> Request:
