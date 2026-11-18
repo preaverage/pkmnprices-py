@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-from .models import CursorInfo, CursorPage, Model, Page, PageInfo
+import httpx
+
+from .models import CardsExport, CursorInfo, CursorPage, Model, Page, PageInfo
+
+_FILENAME_PATTERN = re.compile(r'filename="?([^";]+)"?', re.IGNORECASE)
+_DEFAULT_EXPORT_NAME = "pkmnprices-cards.csv.gz"
 
 
 @dataclass
@@ -12,6 +20,7 @@ class Request:
     path: str
     query: dict[str, Any] = field(default_factory=dict)
     auth: bool = True
+    accept: str = "application/json"
 
 
 def _clean(query: dict[str, Any]) -> dict[str, Any]:
@@ -45,6 +54,22 @@ def cards_get(card_id: int, **query: Any) -> Request:
 
 def cards_history(card_id: int, **query: Any) -> Request:
     return Request("GET", f"/v1/cards/{card_id}/prices/history", _clean(query))
+
+
+def cards_sales_volume(card_id: int, **query: Any) -> Request:
+    return Request("GET", f"/v1/cards/{card_id}/sales/volume", _clean(query))
+
+
+def cards_population(card_id: int, **query: Any) -> Request:
+    return Request("GET", f"/v1/cards/{card_id}/population", _clean(query))
+
+
+def cards_markers() -> Request:
+    return Request("GET", "/v1/cards/markers")
+
+
+def cards_export() -> Request:
+    return Request("GET", "/v1/export/cards", accept="application/gzip")
 
 
 def cards_listings_ebay(card_id: int, **query: Any) -> Request:
@@ -91,3 +116,19 @@ def build_page(raw: dict[str, Any], model: type[Model]) -> Page[Any]:
 def build_cursor_page(raw: dict[str, Any], model: type[Model]) -> CursorPage[Any]:
     items = [model.from_dict(item) for item in raw["data"]]
     return CursorPage(items, CursorInfo.from_dict(raw["pagination"]))
+
+
+def build_export(headers: httpx.Headers, path: str | os.PathLike[str] | None) -> CardsExport:
+    """Describes an export download and decides where its file goes.
+
+    With no ``path`` the file takes the server's name in the working directory.
+    """
+    match = _FILENAME_PATTERN.search(headers.get("content-disposition", ""))
+    filename = match.group(1) if match else None
+    remaining = headers.get("x-export-downloads-remaining", "")
+
+    return CardsExport(
+        path=Path(path) if path is not None else Path(filename or _DEFAULT_EXPORT_NAME),
+        filename=filename,
+        downloads_remaining=int(remaining) if remaining.isdigit() else None,
+    )

@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
 import httpx
@@ -34,53 +36,67 @@ def _rate_limit(headers: httpx.Headers) -> RateLimitInfo:
     return RateLimitInfo(
         credits_charged=_int_header(headers.get("x-credits-charged")),
         credits_limit=_int_header(headers.get("x-credits-limit")),
+        credits_remaining=_int_header(headers.get("x-credits-remaining")),
+        credits_reset=_int_header(headers.get("x-credits-reset")),
+        credits_balance=_int_header(headers.get("x-credits-balance")),
         rate_limit=_int_header(headers.get("x-rate-limit")),
         rate_remaining=_int_header(headers.get("x-rate-remaining")),
+        rate_reset=_int_header(headers.get("x-rate-reset")),
     )
 
 
-def _retry_after(headers: httpx.Headers) -> float | None:
-    raw = headers.get("retry-after")
-    if raw is None:
-        return None
+# The header and the body's retry_after carry the same number; the body is the
+# fallback for a proxy that strips the header.
+def _retry_after(headers: httpx.Headers, body_seconds: Any) -> float | None:
     try:
-        return float(raw)
-    except ValueError:
-        return None
+        return float(headers["retry-after"])
+    except (KeyError, ValueError):
+        pass
+
+    is_number = isinstance(body_seconds, (int, float)) and not isinstance(body_seconds, bool)
+    return float(body_seconds) if is_number else None
 
 
-def _handle(response: httpx.Response, path: str) -> Any:
-    rate_limit = _rate_limit(response.headers)
+def _str_or_none(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
 
-    if response.is_success:
-        if not response.content:
-            return None
-        return response.json()
 
-    body: Any = None
+# An error from a proxy in front of the API may not be JSON at all.
+def _error_detail(response: httpx.Response) -> dict[str, Any]:
     try:
         body = response.json()
     except ValueError:
-        body = None
+        return {}
 
-    has_error = isinstance(body, dict) and isinstance(body.get("error"), dict)
-    code = body["error"]["code"] if has_error else "unknown"
-    message = (
-        body["error"]["message"]
-        if has_error
-        else f"Request to {path} failed with status {response.status_code}"
-    )
+    detail = body.get("error") if isinstance(body, dict) else None
+    return detail if isinstance(detail, dict) else {}
 
-    docs_url = body["error"].get("docs_url") if has_error else None
 
-    raise create_api_error(
+def _api_error(response: httpx.Response, path: str) -> PkmnPricesError:
+    detail = _error_detail(response)
+    limit_type = detail.get("limit_type")
+    fallback = f"Request to {path} failed with status {response.status_code}"
+
+    return create_api_error(
         status=response.status_code,
-        code=code,
-        message=message,
-        docs_url=docs_url if isinstance(docs_url, str) else None,
-        rate_limit=rate_limit,
-        retry_after=_retry_after(response.headers),
+        code=_str_or_none(detail.get("code")) or "unknown",
+        message=_str_or_none(detail.get("message")) or fallback,
+        docs_url=_str_or_none(detail.get("docs_url")),
+        rate_limit=_rate_limit(response.headers),
+        retry_after=_retry_after(response.headers, detail.get("retry_after")),
+        limit_type=limit_type if limit_type in ("per_minute", "daily") else None,
+        resets_at=_str_or_none(detail.get("resets_at")),
+        upgrade_url=_str_or_none(detail.get("upgrade_url")),
     )
+
+
+def _handle(response: httpx.Response, path: str) -> Any:
+    if not response.is_success:
+        raise _api_error(response, path)
+
+    if not response.content:
+        return None
+    return response.json()
 
 
 def _is_retryable(error: Exception) -> bool:
@@ -106,7 +122,7 @@ class _BaseTransport:
         self._max_retries = max_retries
 
     def _headers(self, request: Request) -> dict[str, str]:
-        headers = {"accept": "application/json"}
+        headers = {"accept": request.accept}
         if request.auth:
             if not self._api_key:
                 raise APIConnectionError(
@@ -155,6 +171,24 @@ class SyncTransport(_BaseTransport):
 
         return _handle(response, request.path)
 
+    # For bodies the caller reads in chunks. One attempt and no retries,
+    # because a retried download can spend a daily download allowance twice.
+    @contextmanager
+    def stream(self, request: Request) -> Iterator[httpx.Response]:
+        try:
+            with self._client.stream(
+                request.method, request.path, params=request.query, headers=self._headers(request)
+            ) as response:
+                if not response.is_success:
+                    response.read()
+                    raise _api_error(response, request.path)
+
+                yield response
+        except httpx.TimeoutException as error:
+            raise APIConnectionError(f"Request to {request.path} timed out", error) from error
+        except httpx.HTTPError as error:
+            raise APIConnectionError(f"Request to {request.path} failed", error) from error
+
     def close(self) -> None:
         self._client.close()
 
@@ -197,6 +231,22 @@ class AsyncTransport(_BaseTransport):
             raise APIConnectionError(f"Request to {request.path} failed", error) from error
 
         return _handle(response, request.path)
+
+    @asynccontextmanager
+    async def stream(self, request: Request) -> AsyncIterator[httpx.Response]:
+        try:
+            async with self._client.stream(
+                request.method, request.path, params=request.query, headers=self._headers(request)
+            ) as response:
+                if not response.is_success:
+                    await response.aread()
+                    raise _api_error(response, request.path)
+
+                yield response
+        except httpx.TimeoutException as error:
+            raise APIConnectionError(f"Request to {request.path} timed out", error) from error
+        except httpx.HTTPError as error:
+            raise APIConnectionError(f"Request to {request.path} failed", error) from error
 
     async def close(self) -> None:
         await self._client.aclose()

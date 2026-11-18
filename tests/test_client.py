@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import httpx
 import pytest
 
-from pkmnprices import AsyncPkmnPrices, ForbiddenError, CreditLimitError, PkmnPrices
+from pkmnprices import AsyncPkmnPrices, CreditLimitError, ForbiddenError, PkmnPrices
 
 
 def _json(payload: object, status: int = 200, headers: dict | None = None) -> httpx.Response:
@@ -515,3 +516,236 @@ async def test_async_client() -> None:
         card = await client.cards.get(789, currency="usd")
         assert card.name == "Charizard ex"
         assert seen["key"] == "pk_test"
+
+
+def _list_page(ids: list[int], **pagination: object) -> httpx.Response:
+    return _json({
+        "data": [{"id": i, "name": "s", "language": "English"} for i in ids],
+        "pagination": {"page": 1, "per_page": 2, "total": 5, "total_pages": 3, **pagination},
+    })
+
+
+def test_list_iteration_follows_the_keyset_cursor() -> None:
+    pages = [
+        _list_page([1, 2], next_cursor="c1"),
+        _list_page([3, 4], next_cursor="c2"),
+        _list_page([5], next_cursor=None),
+    ]
+    seen: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(dict(request.url.params))
+        return pages[len(seen) - 1]
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    sets = client.sets.list_all(language="English", per_page=2)
+
+    assert [s.id for s in sets] == [1, 2, 3, 4, 5]
+    # A cursor replaces the page number, and the filters ride along.
+    assert seen == [
+        {"language": "English", "page": "1", "per_page": "2"},
+        {"language": "English", "per_page": "2", "cursor": "c1"},
+        {"language": "English", "per_page": "2", "cursor": "c2"},
+    ]
+
+
+def test_price_ordered_list_pages_by_number() -> None:
+    pages = [
+        _list_page([1, 2], next_cursor=None, total_pages=2),
+        _list_page([3], next_cursor=None, page=2, total_pages=2),
+    ]
+    seen: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params.get("page"))
+        return pages[len(seen) - 1]
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+
+    assert len(client.cards.list_all(sort="price_asc")) == 3
+    assert seen == ["1", "2"]
+
+
+def test_card_markers_parse_and_filter() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = request.url
+        return _json({
+            "data": [{"id": 1, "tcg_player_id": None, "name": "Pikachu", "image_url": None,
+                      "number": "025", "total_set_number": "165", "rarity": "Common",
+                      "pattern": "Poke Ball Pattern", "stamp": None, "stamp_number": None,
+                      "distribution": "Staff", "placement": None, "artist": "Atsuko Nishida",
+                      "hp": 60, "set": {"id": 1, "name": "151"}}],
+            "pagination": {"page": 1, "per_page": 50, "total": 1, "total_pages": 1, "next_cursor": None},
+        })
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    page = client.cards.list(pattern="Poke Ball Pattern", distribution="Staff", artist="nishida", hp=60)
+
+    assert dict(seen["url"].params) == {
+        "pattern": "Poke Ball Pattern", "distribution": "Staff", "artist": "nishida", "hp": "60",
+    }
+    card = page.data[0]
+    assert card.tcg_player_id is None
+    assert (card.pattern, card.distribution, card.stamp) == ("Poke Ball Pattern", "Staff", None)
+
+
+def test_markers_endpoint() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/cards/markers"
+        return _json({"patterns": [{"value": "Cosmos Holo", "cards": 412}], "stamps": [],
+                      "distributions": [], "placements": []})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    markers = client.cards.markers()
+
+    assert markers.patterns[0].value == "Cosmos Holo"
+    assert markers.patterns[0].cards == 412
+
+
+def test_population_builds_nested_graders() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = request.url
+        return _json({"card_id": 12927, "variants": [{
+            "variant": "Holofoil", "total_population": 133526, "total_gems": 1043, "gem_rate": 0.78,
+            "grades": {"9": 11158, "10": 781}, "pristine": 12, "black_label": 1, "authentic": 873,
+            "percent_higher": {"9": 0.91}, "last_population_change": "2026-10-18",
+            "updated_at": "2026-10-18T19:29:42+00:00",
+            "graders": {"PSA": {"total": 107747, "gems": 490, "gem_rate": 0.45,
+                                "grades": {"10": 490}, "pristine": None, "black_label": None,
+                                "authentic": 799, "altered": None, "qualified": 206,
+                                "last_population_change": "2026-10-18", "pop_report_url": None,
+                                "spec_id": "544027", "description": "1999 Pokemon Game Charizard-Holo"}},
+        }]})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    population = client.cards.population(12927, variant="Holofoil")
+
+    assert seen["url"].path == "/v1/cards/12927/population"
+    assert seen["url"].params["variant"] == "Holofoil"
+    holo = population.variants[0]
+    assert holo.grades["10"] == 781
+    assert holo.graders["PSA"].total == 107747
+    assert holo.graders["PSA"].pristine is None
+
+
+def test_sales_volume() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = request.url
+        return _json({
+            "data": [{"date": "2026-10-20", "currency": "USD", "variant": None, "graded": False,
+                      "sales": 7, "priced_sales": 6, "median": 41.5}],
+            "pagination": {"page": 1, "per_page": 30, "total": 1, "total_pages": 1},
+        })
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    days = list(client.cards.iterate_sales_volume(789, period="90d", graded=False))
+
+    assert seen["url"].path == "/v1/cards/789/sales/volume"
+    assert dict(seen["url"].params) == {"period": "90d", "graded": "false", "page": "1"}
+    assert (days[0].sales, days[0].priced_sales, days[0].median) == (7, 6, 41.5)
+
+
+def test_listing_filters_added_since_4_1() -> None:
+    seen: list[httpx.URL] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url)
+        return _json({"data": [], "pagination": {"has_more": False, "next_cursor": None, "count": 0}})
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    client.cards.listings.ebay(789, updated_since="2026-11-01T00:00:00Z", period="90d")
+    client.cards.listings.cardmarket(789, graded=False, signed=False, altered=False, min_sell_count=0)
+    client.sealed.listings.cardmarket(5678, opened=False)
+    client.sealed.listings.ebay(5678, period="30d")
+
+    assert dict(seen[0].params) == {"updated_since": "2026-11-01T00:00:00Z", "period": "90d"}
+    assert dict(seen[1].params) == {
+        "graded": "false", "signed": "false", "altered": "false", "min_sell_count": "0",
+    }
+    assert dict(seen[2].params) == {"opened": "false"}
+    assert dict(seen[3].params) == {"period": "30d"}
+
+
+def test_rate_limit_error_reports_which_limit() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json(
+            {"error": {"code": "credit_limit_exceeded", "message": "daily credit limit exceeded",
+                       "docs_url": "https://www.pkmnprices.com/docs/rate-limits", "limit_type": "daily",
+                       "retry_after": 41230, "resets_at": "2026-10-26T00:00:00Z",
+                       "upgrade_url": "https://www.pkmnprices.com/dashboard?view=billing"}},
+            429,
+            {"x-credits-limit": "500", "x-credits-remaining": "0", "x-credits-reset": "41230"},
+        )
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    with pytest.raises(CreditLimitError) as exc:
+        client.sets.get(1)
+
+    error = exc.value
+    assert error.limit_type == "daily"
+    # No Retry-After header here, so the body's retry_after is the fallback.
+    assert error.retry_after == 41230.0
+    assert error.resets_at == "2026-10-26T00:00:00Z"
+    assert error.upgrade_url == "https://www.pkmnprices.com/dashboard?view=billing"
+    assert (error.rate_limit.credits_remaining, error.rate_limit.credits_reset) == (0, 41230)
+
+
+_EXPORT_HEADERS = {
+    "content-type": "application/gzip",
+    "content-disposition": 'attachment; filename="pkmnprices-cards-2026-10-26.csv.gz"',
+    "x-export-downloads-remaining": "1",
+}
+
+
+def test_export_writes_the_file(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/export/cards"
+        assert request.headers["accept"] == "application/gzip"
+        return httpx.Response(200, content=b"\x1f\x8b\x08", headers=_EXPORT_HEADERS)
+
+    client = PkmnPrices("pk_test", _transport=httpx.MockTransport(handler))
+    export = client.cards.export(tmp_path / "cards.csv.gz")
+
+    assert export.path.read_bytes() == b"\x1f\x8b\x08"
+    assert export.filename == "pkmnprices-cards-2026-10-26.csv.gz"
+    assert export.downloads_remaining == 1
+
+
+def test_export_is_not_retried() -> None:
+    state = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        state["n"] += 1
+        return _json({"error": {"code": "forbidden", "message": "Daily export download limit reached"}}, 403)
+
+    client = PkmnPrices("pk_test", max_retries=3, _transport=httpx.MockTransport(handler))
+    with pytest.raises(ForbiddenError):
+        client.cards.export("unused.csv.gz")
+
+    assert state["n"] == 1
+
+
+async def test_async_list_iteration_and_export(tmp_path: Path) -> None:
+    pages = [_list_page([1, 2], next_cursor="c1"), _list_page([3], next_cursor=None)]
+    cursors: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/export/cards":
+            return httpx.Response(200, content=b"\x1f\x8b\x08", headers=_EXPORT_HEADERS)
+
+        cursors.append(request.url.params.get("cursor"))
+        return pages[len(cursors) - 1]
+
+    async with AsyncPkmnPrices("pk_test", _transport=httpx.MockTransport(handler)) as client:
+        sets = await client.sets.list_all()
+        export = await client.cards.export(tmp_path / "cards.csv.gz")
+
+    assert [s.id for s in sets] == [1, 2, 3]
+    assert cursors == [None, "c1"]
+    assert export.path.read_bytes() == b"\x1f\x8b\x08"

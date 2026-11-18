@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import types as _types
 from collections.abc import Sequence
+from pathlib import Path
 from typing import (
     Any,
     Generic,
@@ -15,7 +16,9 @@ from typing import (
 )
 
 Currency = Literal["USD", "EUR"]
-PriceSource = Literal["tcgplayer", "ebay", "cardmarket"]
+# Where a market price comes from. eBay is not a price source: its sold comps
+# are individual sales, served by the eBay listings methods only.
+PriceSource = Literal["tcgplayer", "cardmarket"]
 HealthStatus = Literal["healthy", "degraded", "unreachable"]
 
 # Whether a sold comp describes one card alone. A variant and its base card can
@@ -77,6 +80,11 @@ def _coerce(tp: Any, value: Any) -> Any:
         inner = args[0] if args else Any
         return [_coerce(inner, item) for item in value]
 
+    if origin is dict:
+        args = get_args(tp)
+        inner = args[1] if len(args) == 2 else Any
+        return {key: _coerce(inner, item) for key, item in value.items()}
+
     if isinstance(tp, type) and dataclasses.is_dataclass(tp):
         return _build(tp, value)
 
@@ -107,10 +115,11 @@ class SetRef(Model):
 @dataclasses.dataclass
 class Set(Model):
     id: int
-    tcg_player_id: int
+    # None for sets with no TCGplayer group, e.g. German and Spanish sets.
+    tcg_player_id: int | None
     name: str
     language: str
-    card_count: int
+    card_count: int | None
 
 
 @dataclasses.dataclass
@@ -119,19 +128,30 @@ class Price(Model):
     currency: Currency
     condition: str | None
     variant: str | None
-    market_price: float
+    market_price: float | None
     created_at: str
 
 
 @dataclasses.dataclass
 class CardSummary(Model):
     id: int
-    tcg_player_id: int
+    # None for cards with no TCGplayer product, e.g. German and Spanish cards.
+    tcg_player_id: int | None
     name: str
     image_url: str | None
     number: str | None
     total_set_number: str | None
     rarity: str | None
+    # Foil pattern of this printing, e.g. "Poke Ball Pattern", "Cosmos Holo".
+    pattern: str | None
+    # Stamp or promotional release, e.g. "GYM", "Costco Exclusive".
+    stamp: str | None
+    # Number printed inside the stamp (Battle Academy decks), e.g. "15".
+    stamp_number: str | None
+    # How this copy was handed out, e.g. "Staff".
+    distribution: str | None
+    # Result a prize copy was awarded for, e.g. "1st Place", "Top 16".
+    placement: str | None
     artist: str | None
     hp: int | None
     set: SetRef
@@ -160,9 +180,117 @@ class PriceHistoryPoint(Model):
     currency: Currency
     condition: str | None
     variant: str | None
-    avg: float
-    low: float
-    high: float
+    avg: float | None
+    low: float | None
+    high: float | None
+
+
+@dataclasses.dataclass
+class MarkerCount(Model):
+    # The value as it appears on cards and as the filter expects it.
+    value: str
+    cards: int
+
+
+# Every value the pattern, stamp, distribution and placement card filters
+# accept, most common first.
+@dataclasses.dataclass
+class CardMarkers(Model):
+    patterns: list[MarkerCount]
+    stamps: list[MarkerCount]
+    distributions: list[MarkerCount]
+    placements: list[MarkerCount]
+
+
+# One day of eBay sold comps for a card, per currency, variant and graded.
+@dataclasses.dataclass
+class SalesVolumePoint(Model):
+    date: str
+    currency: Currency
+    # Printing the sales were filed under. None when the listing title did not
+    # narrow the sale to one printing; keep that bucket apart from named ones.
+    variant: str | None
+    # A slab (a grader or grade is recorded) as against a raw card.
+    graded: bool
+    # Sold comps that day, every one of them.
+    sales: int
+    # Sales that went into `median`: all of them except accepted Best Offers,
+    # whose listed price can differ from what the buyer paid.
+    priced_sales: int
+    median: float | None
+
+
+# One grader's counts for one printing.
+@dataclasses.dataclass
+class GraderPopulation(Model):
+    total: int
+    # Copies at this grader's gem grade or higher.
+    gems: int
+    # `gems` as a percentage of `total`, two decimals.
+    gem_rate: float
+    # Copies at each numeric grade. Keys are "1" to "10" with halves as "8.5".
+    # BGS has no plain "10", only pristine and black_label.
+    grades: dict[str, int]
+    # 10 Pristine. None for a grader that does not issue it (PSA).
+    pristine: int | None
+    # BGS Black Label or CGC Perfect 10. None for a grader with neither.
+    black_label: int | None
+    authentic: int
+    # CGC's "Authentic Altered". None for the other graders.
+    altered: int | None
+    # Copies graded with a qualifier (PSA's OC, MK, ST and so on).
+    qualified: int
+    # The last day this grader's count changed, as YYYY-MM-DD.
+    last_population_change: str | None
+    # The grader's own population report page for the set.
+    pop_report_url: str | None
+    # PSA's spec number for the card. None for other graders.
+    spec_id: str | None
+    # How the grader names the card in its own report.
+    description: str
+
+
+# How many copies of one printing PSA, BGS, SGC and CGC have graded.
+@dataclasses.dataclass
+class VariantPopulation(Model):
+    # The variant as it appears in price rows, e.g. "Reverse Holofoil".
+    variant: str
+    # Every graded copy across all graders, authentic and qualified included.
+    total_population: int
+    # Copies at each grader's gem grade or higher: PSA 10, BGS 9.5 and up.
+    total_gems: int
+    # total_gems as a percentage of total_population, two decimals. None when
+    # nothing has been graded.
+    gem_rate: float | None
+    # Copies at each numeric grade, summed across graders. Keys are "1" to "10"
+    # with halves as "8.5". A grade nobody issued is absent, not zero.
+    grades: dict[str, int]
+    # 10 Pristine across BGS, CGC and SGC. Above a plain 10, not in `grades`.
+    pristine: int
+    # BGS Black Label and CGC Perfect 10, summed. Above Pristine.
+    black_label: int
+    # Graded authentic without a numeric grade.
+    authentic: int
+    # For each key in `grades`, the percentage of numerically graded copies
+    # that graded higher. percent_higher["8.5"] is the share that came back a
+    # 9 or better, the usual input to a grading ROI estimate.
+    percent_higher: dict[str, float]
+    # Each grader's own counts, keyed "PSA", "BGS", "SGC", "CGC". A grader with
+    # no copies of this printing on record is absent.
+    graders: dict[str, GraderPopulation]
+    # The last day any grader's count changed, as YYYY-MM-DD.
+    last_population_change: str | None
+    # When these counts were last refreshed.
+    updated_at: str
+
+
+# Graded populations for one card. A variant that could not be tied to
+# population records is left out, so `variants` can be shorter than the card's
+# variant list, or empty. An empty list is not a population of zero.
+@dataclasses.dataclass
+class CardPopulation(Model):
+    card_id: int
+    variants: list[VariantPopulation]
 
 
 @dataclasses.dataclass
@@ -204,6 +332,13 @@ class EbayListing(Model):
     # the list price in `price` with nothing marking them, so pass every
     # sale_type value as a filter to leave the None rows out.
     sale_type: SaleType | None
+    # When a field of this comp last changed after it went in: a corrected
+    # grade, price, sale type, printing or title, or a move to the card it was
+    # for. None when nothing has changed since corrections began being recorded
+    # on 2026-10-20, and on every sealed comp. A correction never moves
+    # ingested_at, so a `since` poll does not return it. Poll `updated_since`
+    # and replace your copy by id.
+    updated_at: str | None
 
 
 @dataclasses.dataclass
@@ -223,9 +358,10 @@ class CardmarketListing(Model):
     # price: a signed and altered Near Mint copy at EUR 200 must not set the
     # Near Mint price of a card whose clean copies sell for EUR 3,800, and a
     # slab is priced for the slab rather than for the card. So the cheapest
-    # row from cardmarket() is not necessarily the card's market_price --
-    # filter these out before deriving a price of your own, along with
-    # `opened` and any row whose `sell_count` is 0.
+    # row from cardmarket() is not necessarily the card's market_price. Filter
+    # these out before deriving a price of your own, along with `opened` and
+    # any row whose `sell_count` is 0. The graded, signed, altered and opened
+    # filters do it server-side.
     signed: bool
     altered: bool
     graded: bool
@@ -235,13 +371,14 @@ class CardmarketListing(Model):
     # always naming the grader, and these are read from free-text comments.
     grader: str | None
     grade: str | None
-    # The offer's own seller says the item is not sealed -- an opened wrapper,
+    # The offer's own seller says the item is not sealed: an opened wrapper,
     # or a display missing its shrink. Sealed products only; always False on a
     # card listing, where the distinction does not exist. Same treatment as
     # signed/altered/graded: a real offer, excluded from the market price. A
     # Jungle booster pack whose every other offer sits between EUR 799 and
     # EUR 950 carries one at EUR 10.00 reading "Not Sealed (open, just the
-    # booster)" -- a real price for an opened pack, not a EUR 10 booster pack.
+    # booster)". That is a real price for an opened pack, not a EUR 10 booster
+    # pack.
     opened: bool
     # The seller's completed sales, as Cardmarket reports them. This is why a
     # market_price can sit ABOVE the cheapest listing you can see: an offer
@@ -290,7 +427,7 @@ class TcgplayerListing(Model):
 @dataclasses.dataclass
 class SealedSummary(Model):
     id: int
-    tcg_player_id: int
+    tcg_player_id: int | None
     name: str
     image_url: str | None
     set: SetRef
@@ -307,6 +444,21 @@ class Sealed(SealedSummary):
 class Health(Model):
     status: HealthStatus
     database: str
+    # Server time this check ran. Tells a live response from a cached one.
+    timestamp: str
+    # Deployed API version.
+    version: str
+
+
+# The catalog export, written to disk by cards.export().
+@dataclasses.dataclass
+class CardsExport:
+    # Where the file was written.
+    path: Path
+    # The server's name for the file, e.g. "pkmnprices-cards-2026-10-26.csv.gz".
+    filename: str | None
+    # Downloads left today. Each account gets two per UTC day.
+    downloads_remaining: int | None
 
 
 @dataclasses.dataclass
@@ -315,6 +467,11 @@ class PageInfo(Model):
     per_page: int
     total: int
     total_pages: int
+    # Set on the set, card and sealed lists, which also page by keyset. Pass it
+    # as `cursor` to read the next page without an offset. None on the last
+    # page, and on price-sorted or price-filtered lists, which only page by
+    # number.
+    next_cursor: str | None = None
 
 
 @dataclasses.dataclass

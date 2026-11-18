@@ -97,6 +97,22 @@ A cursor is bound to the sort family it was issued under, so do not reuse a
 `total_*` cursor with a `price_*` sort or the reverse. `min_price` and
 `max_price` filter item price under every sort.
 
+The set, card and sealed lists also page by keyset. Each page carries
+`pagination.next_cursor`, and passing it back as `cursor` reads the next page
+without an offset, so page 500 costs what page 1 does and a card added mid-walk
+is neither repeated nor skipped. `iterate()` and `list_all()` follow the cursor
+for you. To do it by hand:
+
+```python
+page = client.cards.list(set_id=123, per_page=100)
+while page.pagination.next_cursor:
+    page = client.cards.list(set_id=123, per_page=100, cursor=page.pagination.next_cursor)
+```
+
+Send `cursor` or `page`, not both. Lists filtered or sorted by price
+(`min_price`, `max_price`, `condition`, `variant`, `sort`) have no cursor:
+`next_cursor` is `None` there and the iterators page by number.
+
 Sealed products carry the same three listing sources, under `client.sealed.listings`:
 
 ```python
@@ -112,7 +128,7 @@ for sale in client.sealed.listings.iterate_ebay(5678, sort="price_desc"):
 
 Sealed Cardmarket offers take no `variant`: every sealed row is written with an
 empty one, so the filter could only ever exclude everything. They are also
-single-language — the offers returned are the ones in the set's own language, so
+single-language: the offers returned are the ones in the set's own language, so
 a Cardmarket product page showing offers in other languages lists more than this
 endpoint does.
 
@@ -121,6 +137,29 @@ Sealed TCGplayer offers are normally condition `"Unopened"` with an empty
 never graded, so `graded`, `grader`, and `grade` aren't accepted there and
 `grader`/`grade` come back `None`. The async client mirrors all of these on
 `AsyncPkmnPrices`.
+
+## Card markers
+
+Some printings differ from the base card only by a foil pattern, a stamp, or
+how the copy was handed out. Cards carry those as `pattern`, `stamp`,
+`stamp_number`, `distribution` and `placement`, each `None` on a card without
+one, and the card list filters on four of them:
+
+```python
+staff = client.cards.list(distribution="Staff")
+poke_ball = client.cards.list(set_id=123, pattern="Poke Ball Pattern")
+```
+
+The filters match exactly as the values are spelled in responses.
+`client.cards.markers()` returns every value each filter accepts, with how many
+cards carry it:
+
+```python
+markers = client.cards.markers()
+print(markers.stamps[0].value, markers.stamps[0].cards)
+```
+
+The card list also filters on `artist` (a case-insensitive substring) and `hp`.
 
 ## Which card a comp is really about
 
@@ -231,6 +270,99 @@ same rows, and pays for them again.
 
 A card with nothing new returns an empty `data` list.
 
+### Corrections
+
+Comps are sometimes fixed after they go in: a slab regraded because the title
+was misread, an accepted offer's list price replaced with what the buyer paid,
+a sale moved to the card it was really for. A fix does not move `ingested_at`,
+so `since` never returns it. If you store comps, poll `updated_since` as well
+and replace your copy by `id`:
+
+```python
+fixed = client.cards.listings.all_ebay(789, updated_since="2026-11-01T00:00:00Z")
+```
+
+`updated_at` on each row says when it changed. It is `None` on comps that
+haven't changed since 2026-10-20, when corrections began being recorded, and on
+every sealed comp. Removed comps aren't reported: a deleted comp stops
+appearing.
+
+### `period` is for pricing
+
+`period="90d"` returns comps that sold in the last 90 days, under any sort, so
+this is the cheapest recent PSA 10:
+
+```python
+page = client.cards.listings.ebay(
+    789, grader="PSA", grade="10", period="90d", sort="price_asc",
+)
+```
+
+Don't poll on `period`. Comps often arrive days after the sale, and a late one
+would fall outside your next window. Use `since` to sync and `period` to price;
+the two combine.
+
+## eBay sales volume
+
+`sales_volume()` counts the same eBay comps by day, which is cheaper than
+listing them when you only need to know how often a card trades:
+
+```python
+for day in client.cards.sales_volume(789, period="90d", graded=False).data:
+    print(day.date, day.sales, day.median)
+```
+
+A row is one day, currency, variant and graded group, newest day first, so a
+card sold both raw and graded has two rows for a day. `sales` counts every
+comp. `priced_sales` and `median` leave out accepted Best Offers. `variant` is
+`None` when the title did not narrow the sale to one printing.
+
+This is eBay only. TCGplayer and Cardmarket sales are not recorded, so a day
+with no row means no eBay comp that day. Pro plan and up.
+
+## Graded population
+
+`population()` returns how many copies of a card PSA, BGS, SGC and CGC have
+graded, per variant:
+
+```python
+for pop in client.cards.population(12927).variants:
+    print(pop.variant, pop.total_population, pop.grades.get("10"), pop.gem_rate)
+    psa = pop.graders.get("PSA")
+    print(psa.total if psa else 0, pop.percent_higher.get("8.5"))
+```
+
+`grades` is keyed `"1"` to `"10"` with halves as `"8.5"`. Pristine and Black
+Label tens are separate fields above `"10"`. `percent_higher["8.5"]` is the
+share of graded copies that came back a 9 or better, the usual input to a
+grading ROI estimate.
+
+A variant that could not be tied to its population records is left out, so
+`variants` can be shorter than the card's variant list, or empty. An empty list
+is not a population of zero. One credit per request, Pro plan and up.
+
+## Catalog export
+
+On Scale and Business, `export()` downloads the whole price catalog as one
+gzipped CSV, so a job that needs every card doesn't have to page the card list:
+
+```python
+export = client.cards.export("cards.csv.gz")
+print(export.path, export.downloads_remaining)
+```
+
+Leave the path off and the file takes the server's name, such as
+`pkmnprices-cards-2026-10-26.csv.gz`, in the working directory.
+
+One row per card, currency, condition and variant, with the current raw market
+price. Columns: `card_id, tcgplayer_id, name, number, set_number, rarity,
+set_id, set, language, currency, condition, variant, market_price`.
+
+The export is not charged in credits. Each account can download it twice per
+UTC day, so the client never retries it for you, and `downloads_remaining` says
+how many downloads are left. Prices update once a day, so a second download the
+same day returns the same numbers.
+
 ## TCGplayer freshness
 
 `updated_at` on a TCGplayer offer is not a freshness signal. It moves only when
@@ -268,18 +400,27 @@ copies sell for EUR 3,800, and a slab is priced for the slab rather than for the
 card.
 
 The practical consequence: **the cheapest row you get back is not necessarily
-the `market_price`.** Filter these out before deriving a price yourself.
+the `market_price`.** Filter these out before deriving a price yourself, or let
+the API do it:
+
+```python
+clean = client.cards.listings.all_cardmarket(789, graded=False, signed=False, altered=False)
+slabs = client.cards.listings.all_cardmarket(789, grader="PSA", grade="10")
+```
+
+Each of `graded`, `signed` and `altered` takes `True` for only those offers and
+`False` to leave them out. Sealed products add `opened`.
 
 `grader` and `grade` are named to match the graded eBay sale shape, so "PSA 10"
 reads the same whichever source it came from. Both are `None` unless `graded`
-is true, and can be `None` even then — Cardmarket flags a slab without always
+is true, and can be `None` even then: Cardmarket flags a slab without always
 naming the grader, and the details are read from free-text seller comments.
 
 `opened` is the sealed-product member of the set: the seller's own comment says
 the item is not sealed. It is always `False` on a card. A Jungle booster pack
 whose every other offer sits between EUR 799 and EUR 950 carries one at
-EUR 10.00 reading *"Not Sealed (open, just the booster)"* — a real price for an
-opened pack, not a EUR 10 Jungle booster pack.
+EUR 10.00 reading *"Not Sealed (open, just the booster)"*. That is a real price
+for an opened pack, not a EUR 10 Jungle booster pack.
 
 ## `sell_count`
 
@@ -293,13 +434,16 @@ for offer in client.sealed.listings.iterate_cardmarket(1430):
         continue  # not the sealed product
     if offer.sell_count == 0:
         continue  # no completed sales; sets no price
-    # offer.sell_count is None means no count was recorded -- not zero sales
+    # offer.sell_count is None means no count was recorded, which is not zero sales
 ```
 
 **`None` is not zero.** `None` means no count was recorded for that row; `0`
 means Cardmarket reports the seller as having sold nothing. Treat only `0` as
-disqualifying — and note that `if not offer.sell_count` catches both, which is
-the mistake this distinction exists to prevent.
+disqualifying. `if not offer.sell_count` catches both, which is the mistake
+this distinction exists to prevent.
+
+`min_sell_count` filters on this field. It cannot tell an unrecorded count from
+a low one, so it leaves the `None` rows out.
 
 ## Languages
 
@@ -308,10 +452,13 @@ ever have.
 
 | Language | Cards | Pricing | Plan |
 |----------|-------|---------|------|
-| English | 28,158 | USD (TCGplayer, eBay) + EUR (Cardmarket) | Free |
-| Japanese | 29,660 | USD + EUR | Pro+ |
-| German | 13,078 | EUR (Cardmarket) only | Pro+ |
-| Spanish | 12,419 | EUR (Cardmarket) only | Pro+ |
+| English | 28,383 | USD (TCGplayer) + EUR (Cardmarket) | Free |
+| Japanese | 30,001 | USD + EUR | Pro+ |
+| German | 17,462 | EUR (Cardmarket) only | Pro+ |
+| Spanish | 15,543 | EUR (Cardmarket) only | Pro+ |
+
+Counted on 2026-11-01. `tcg_player_id` is `None` on German and Spanish cards
+and sets, which have no TCGplayer product.
 
 ```python
 german = client.cards.list(language="German", currency="eur")
@@ -336,8 +483,8 @@ A free key is limited to English. Asking for Japanese, German or Spanish raises
 `ForbiddenError`, and omitting `language` returns English only rather than the
 whole catalogue.
 
-German coverage runs from HeartGold & SoulSilver (2010) to current sets, and
-Spanish from Black & White (2011). Spanish price history only goes back to when
+German coverage runs from Base Set (1999) to current sets, and Spanish from
+Black & White (2011). Spanish price history only goes back to when
 Spanish pricing started, so it is shorter than the other languages'. A Spanish
 card with no Cardmarket offer in Spanish yet has no price, which is missing
 data, not a zero.
@@ -379,6 +526,18 @@ Both fields are `None` until the product has been mapped.
 
 Everything raised subclasses `PkmnPricesError`, which carries `status`, `code`, `docs_url`, `rate_limit`, and `retry_after`. `docs_url` is the docs page for that class of error as sent by the API, so a 401 points at authentication, a 403 at pricing and a 429 at rate limits; it is `None` when the response had no body to read it from.
 
+A 429 also says which limit it hit. `limit_type` is `"per_minute"` or `"daily"`,
+`retry_after` is the seconds until a retry can succeed, and `resets_at` is that
+instant as an RFC 3339 timestamp. A per-minute limit clears within 60 seconds
+and is retried for you. A daily one does not clear until 00:00 UTC, so it is
+raised straight away as a `CreditLimitError`, with `upgrade_url` pointing at
+the dashboard page for changing plan or adding prepaid credits.
+
+`rate_limit` holds the credit and rate headers of the failed response:
+`credits_charged`, `credits_limit`, `credits_remaining`, `credits_reset`,
+`credits_balance` (only while the account holds prepaid credits), `rate_limit`,
+`rate_remaining` and `rate_reset`.
+
 ```python
 from pkmnprices import ForbiddenError, NotFoundError, RateLimitError
 
@@ -396,6 +555,16 @@ A 401 comes back with `code` set to `missing_api_key` when no key was sent and
 `invalid_api_key` when the key doesn't match one, both as `UnauthorizedError`.
 
 Subclasses: `BadRequestError` (400), `UnauthorizedError` (401), `ForbiddenError` (403), `NotFoundError` (404), `ConflictError` (409), `CreditLimitError` and `RateLimitError` (429), `InternalServerError` (5xx), `APIConnectionError` (network/timeout).
+
+## Upgrading from 4.x
+
+5.0.0 changes type hints only, to match what the API sends:
+
+- `tcg_player_id` is `int | None` on cards, sets and sealed products.
+- `market_price` on a price and `avg`, `low` and `high` on a price history row
+  are `float | None`. `card_count` on a set is `int | None`.
+- `PriceSource` is `Literal["tcgplayer", "cardmarket"]`. eBay was never a price
+  source.
 
 ## License
 
