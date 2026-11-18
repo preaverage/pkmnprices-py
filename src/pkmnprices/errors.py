@@ -1,14 +1,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
+
+# Which limit a 429 hit. They clear on different clocks: per_minute within 60
+# seconds, daily not until 00:00 UTC.
+LimitType = Literal["per_minute", "daily"]
 
 
 @dataclass
 class RateLimitInfo:
     credits_charged: int | None = None
+    # The plan's daily allowance.
     credits_limit: int | None = None
+    # Credits left in today's allowance after this request.
+    credits_remaining: int | None = None
+    # Seconds until the allowance refills at 00:00 UTC.
+    credits_reset: int | None = None
+    # Prepaid credits left. Sent only while the account holds a balance.
+    credits_balance: int | None = None
     rate_limit: int | None = None
     rate_remaining: int | None = None
+    # Seconds until the per-minute window closes.
+    rate_reset: int | None = None
 
 
 class PkmnPricesError(Exception):
@@ -21,6 +35,9 @@ class PkmnPricesError(Exception):
         docs_url: str | None = None,
         rate_limit: RateLimitInfo | None = None,
         retry_after: float | None = None,
+        limit_type: LimitType | None = None,
+        resets_at: str | None = None,
+        upgrade_url: str | None = None,
     ) -> None:
         super().__init__(message)
         self.status = status
@@ -30,7 +47,15 @@ class PkmnPricesError(Exception):
         # None when the response carried no body to read it from.
         self.docs_url = docs_url
         self.rate_limit = rate_limit or RateLimitInfo()
+        # Seconds until a retry can succeed.
         self.retry_after = retry_after
+        # Set on a 429. None on every other error.
+        self.limit_type = limit_type
+        # On a 429, when the wait ends, RFC 3339 in UTC.
+        self.resets_at = resets_at
+        # On a daily-limit 429, the dashboard page for moving up a plan or
+        # adding prepaid credits.
+        self.upgrade_url = upgrade_url
 
 
 class BadRequestError(PkmnPricesError): ...
@@ -67,6 +92,9 @@ def create_api_error(
     docs_url: str | None,
     rate_limit: RateLimitInfo,
     retry_after: float | None,
+    limit_type: LimitType | None = None,
+    resets_at: str | None = None,
+    upgrade_url: str | None = None,
 ) -> PkmnPricesError:
     cls: type[PkmnPricesError]
     if status == 429:
@@ -83,4 +111,7 @@ def create_api_error(
         docs_url=docs_url,
         rate_limit=rate_limit,
         retry_after=retry_after,
+        limit_type=limit_type,
+        resets_at=resets_at,
+        upgrade_url=upgrade_url,
     )
